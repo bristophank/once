@@ -144,6 +144,9 @@ func TestGaplessDeployment(t *testing.T) {
 	secondName, err := app.ContainerName(ctx)
 	require.NoError(t, err)
 	assert.NotEqual(t, firstName, secondName, "container name should change between deploys")
+
+	require.NoError(t, ns.Refresh(ctx))
+	assert.Len(t, ns.Applications(), 1, "should have exactly one application after redeploy and refresh")
 }
 
 func TestLargeLabelData(t *testing.T) {

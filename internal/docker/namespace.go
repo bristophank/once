@@ -132,6 +132,11 @@ func (n *Namespace) EventWatcher() *EventWatcher {
 
 // Private
 
+type appCandidate struct {
+	app     *Application
+	created int64
+}
+
 func (n *Namespace) restoreState(ctx context.Context) error {
 	containers, err := n.client.ContainerList(ctx, container.ListOptions{All: true})
 	if err != nil {
@@ -140,6 +145,9 @@ func (n *Namespace) restoreState(ctx context.Context) error {
 
 	proxyPrefix := n.name + "-proxy"
 	appPrefix := n.name + "-app-"
+
+	// Use a map to deduplicate apps by name, preferring the most recently created container
+	appsByName := make(map[string]appCandidate)
 
 	for _, c := range containers {
 		for _, name := range c.Names {
@@ -174,11 +182,19 @@ func (n *Namespace) restoreState(ctx context.Context) error {
 							}
 						}
 					}
-					n.applications = append(n.applications, app)
+
+					existing, found := appsByName[settings.Name]
+					if !found || c.Created > existing.created {
+						appsByName[settings.Name] = appCandidate{app: app, created: c.Created}
+					}
 				}
 				break
 			}
 		}
+	}
+
+	for _, candidate := range appsByName {
+		n.applications = append(n.applications, candidate.app)
 	}
 
 	n.sortApplications()
