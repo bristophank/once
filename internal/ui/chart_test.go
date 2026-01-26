@@ -38,24 +38,24 @@ func TestSlidingSum(t *testing.T) {
 	data := []float64{1, 2, 3, 4, 5}
 	result := SlidingSum(data, 2)
 
-	// Each output[i] = sum of data[i:i+2]
-	// [0]: 1+2 = 3
-	// [1]: 2+3 = 5
-	// [2]: 3+4 = 7
-	// [3]: 4+5 = 9
-	// [4]: 5 (only 1 element at end)
-	assert.Equal(t, []float64{3, 5, 7, 9, 5}, result)
+	// Each output[i] = sum of data[i-1:i+1] (backward looking)
+	// [0]: 1 (only 1 element available)
+	// [1]: 1+2 = 3
+	// [2]: 2+3 = 5
+	// [3]: 3+4 = 7
+	// [4]: 4+5 = 9
+	assert.Equal(t, []float64{1, 3, 5, 7, 9}, result)
 }
 
 func TestSlidingSumLargeWindow(t *testing.T) {
 	data := []float64{1, 2, 3}
 	result := SlidingSum(data, 5)
 
-	// Window larger than available data at each position
-	// [0]: 1+2+3 = 6
-	// [1]: 2+3 = 5
-	// [2]: 3 = 3
-	assert.Equal(t, []float64{6, 5, 3}, result)
+	// Window larger than available data, backward looking
+	// [0]: 1 (only 1 available)
+	// [1]: 1+2 = 3
+	// [2]: 1+2+3 = 6
+	assert.Equal(t, []float64{1, 3, 6}, result)
 }
 
 func TestSlidingSumEmpty(t *testing.T) {

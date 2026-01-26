@@ -206,8 +206,8 @@ func brailleColumn(h, rowBottom, rowTop int, dots [4]rune) rune {
 	return bits
 }
 
-// SlidingSum smooths data using overlapping windows.
-// Each output[i] = sum of data[i:i+window] (clamped to bounds).
+// SlidingSum computes the sum of each point and the preceding window-1 points.
+// Missing values before the start of data are treated as zero.
 // Returns same length as input.
 func SlidingSum(data []float64, window int) []float64 {
 	if len(data) == 0 || window <= 0 {
@@ -217,8 +217,8 @@ func SlidingSum(data []float64, window int) []float64 {
 	result := make([]float64, len(data))
 	for i := range data {
 		var sum float64
-		end := min(i+window, len(data))
-		for j := i; j < end; j++ {
+		start := max(0, i-window+1)
+		for j := start; j <= i; j++ {
 			sum += data[j]
 		}
 		result[i] = sum
