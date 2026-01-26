@@ -5,6 +5,8 @@ import (
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+
+	"github.com/basecamp/amar/internal/docker"
 )
 
 type installKeyMap struct {
@@ -23,16 +25,28 @@ var installKeys = installKeyMap{
 	Back: key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "back")),
 }
 
+type installState int
+
+const (
+	installStateForm installState = iota
+	installStateActivity
+)
+
 type Install struct {
+	namespace     *docker.Namespace
 	width, height int
 	help          help.Model
+	state         installState
 	form          InstallForm
+	activity      InstallActivity
 }
 
-func NewInstall() Install {
+func NewInstall(ns *docker.Namespace) Install {
 	return Install{
-		help: help.New(),
-		form: NewInstallForm(),
+		namespace: ns,
+		help:      help.New(),
+		state:     installStateForm,
+		form:      NewInstallForm(),
 	}
 }
 
@@ -45,35 +59,59 @@ func (m Install) Update(msg tea.Msg) (Component, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
 		m.help.SetWidth(m.width)
-		m.form, _ = m.form.Update(msg)
+		if m.state == installStateForm {
+			m.form, _ = m.form.Update(msg)
+		} else {
+			m.activity, _ = m.activity.Update(msg)
+		}
+
 	case tea.KeyMsg:
-		if key.Matches(msg, installKeys.Back) {
+		if m.state == installStateForm && key.Matches(msg, installKeys.Back) {
 			return m, func() tea.Msg { return navigateToDashboardMsg{} }
 		}
+
 	case InstallFormCancelMsg:
 		return m, func() tea.Msg { return navigateToDashboardMsg{} }
+
 	case InstallFormSubmitMsg:
-		// TODO: proceed with installation
-		return m, nil
+		m.state = installStateActivity
+		m.activity = NewInstallActivity(m.namespace, msg.ImageRef, msg.Hostname)
+		m.activity, _ = m.activity.Update(tea.WindowSizeMsg{Width: m.width, Height: m.height})
+		return m, m.activity.Init()
+
+	case InstallActivityDoneMsg:
+		return m, func() tea.Msg { return navigateToAppMsg{appName: msg.AppName} }
 	}
 
 	var cmd tea.Cmd
-	m.form, cmd = m.form.Update(msg)
+	if m.state == installStateForm {
+		m.form, cmd = m.form.Update(msg)
+	} else {
+		m.activity, cmd = m.activity.Update(msg)
+	}
 	return m, cmd
 }
 
 func (m Install) View() string {
 	title := Styles.Title.Width(m.width).Align(lipgloss.Center).Render("Install")
 
-	formView := lipgloss.NewStyle().
-		Width(m.width).
-		Align(lipgloss.Center).
-		Render(m.form.View())
+	var contentView string
+	if m.state == installStateForm {
+		contentView = lipgloss.NewStyle().
+			Width(m.width).
+			Align(lipgloss.Center).
+			Render(m.form.View())
+	} else {
+		contentView = m.activity.View()
+	}
 
-	helpView := m.help.View(installKeys)
-	helpLine := lipgloss.NewStyle().Width(m.width).Align(lipgloss.Center).Render(helpView)
+	var helpLine string
+	if m.state == installStateForm {
+		helpView := m.help.View(installKeys)
+		helpLine = lipgloss.NewStyle().Width(m.width).Align(lipgloss.Center).Render(helpView)
+	}
 
-	topContent := title + "\n\n" + formView
+	topContent := title + "\n\n" + contentView
 	topHeight := lipgloss.Height(topContent)
 	bottomHeight := lipgloss.Height(helpLine)
 	middleHeight := max(m.height-topHeight-bottomHeight, 0)

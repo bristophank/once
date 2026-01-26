@@ -32,6 +32,7 @@ type scrapeTickMsg struct{}
 type scrapeDoneMsg struct{}
 type navigateToInstallMsg struct{}
 type navigateToDashboardMsg struct{}
+type navigateToAppMsg struct{ appName string }
 type quitMsg struct{}
 type switchAppMsg struct{ delta int }
 
@@ -69,9 +70,9 @@ func NewApp(ns *docker.Namespace) App {
 
 	var screen Component
 	if len(apps) > 0 {
-		screen = NewDashboard(apps[0], scraper, dockerScraper)
+		screen = NewDashboard(ns, apps[0], scraper, dockerScraper)
 	} else {
-		screen = NewEmptyState()
+		screen = NewInstall(ns)
 	}
 
 	return App{
@@ -104,27 +105,34 @@ func (m App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		}
 	case NamespaceChangedMsg:
-		_ = m.namespace.Refresh(m.watchCtx)
-		apps := m.namespace.Applications()
-		if len(apps) > 0 && m.currentIndex < len(apps) {
-			m.currentScreen = NewDashboard(apps[m.currentIndex], m.scraper, m.dockerScraper)
-			m.currentScreen, _ = m.currentScreen.Update(m.lastSize)
-		}
-		return m, tea.Batch(m.currentScreen.Init(), m.watchForChanges())
+		m.currentScreen, _ = m.currentScreen.Update(msg)
+		return m, m.watchForChanges()
 	case scrapeTickMsg:
 		return m, m.runScrape()
 	case scrapeDoneMsg:
 		return m, tea.Tick(5*time.Second, func(time.Time) tea.Msg { return scrapeTickMsg{} })
 	case navigateToInstallMsg:
-		m.currentScreen = NewInstall()
+		m.currentScreen = NewInstall(m.namespace)
 		m.currentScreen, _ = m.currentScreen.Update(m.lastSize)
 		return m, m.currentScreen.Init()
+	case navigateToAppMsg:
+		_ = m.namespace.Refresh(m.watchCtx)
+		apps := m.namespace.Applications()
+		for i, app := range apps {
+			if app.Settings.Name == msg.appName {
+				m.currentIndex = i
+				m.currentScreen = NewDashboard(m.namespace, app, m.scraper, m.dockerScraper)
+				m.currentScreen, _ = m.currentScreen.Update(m.lastSize)
+				return m, m.currentScreen.Init()
+			}
+		}
+		return m, nil
 	case navigateToDashboardMsg:
 		apps := m.namespace.Applications()
 		if len(apps) > 0 && m.currentIndex < len(apps) {
-			m.currentScreen = NewDashboard(apps[m.currentIndex], m.scraper, m.dockerScraper)
+			m.currentScreen = NewDashboard(m.namespace, apps[m.currentIndex], m.scraper, m.dockerScraper)
 		} else {
-			m.currentScreen = NewEmptyState()
+			m.currentScreen = NewInstall(m.namespace)
 		}
 		m.currentScreen, _ = m.currentScreen.Update(m.lastSize)
 		return m, m.currentScreen.Init()
@@ -184,7 +192,7 @@ func (m App) switchApp(delta int) (tea.Model, tea.Cmd) {
 	}
 
 	m.currentIndex = newIndex
-	m.currentScreen = NewDashboard(apps[newIndex], m.scraper, m.dockerScraper)
+	m.currentScreen = NewDashboard(m.namespace, apps[newIndex], m.scraper, m.dockerScraper)
 	m.currentScreen, _ = m.currentScreen.Update(m.lastSize)
 	return m, m.currentScreen.Init()
 }

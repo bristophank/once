@@ -54,6 +54,7 @@ var dashboardKeys = dashboardKeyMap{
 }
 
 type Dashboard struct {
+	namespace     *docker.Namespace
 	app           *docker.Application
 	scraper       *metrics.MetricsScraper
 	dockerScraper *docker.Scraper
@@ -73,7 +74,7 @@ type upgradeFinishedMsg struct {
 	err error
 }
 
-func NewDashboard(app *docker.Application, scraper *metrics.MetricsScraper, dockerScraper *docker.Scraper) Dashboard {
+func NewDashboard(ns *docker.Namespace, app *docker.Application, scraper *metrics.MetricsScraper, dockerScraper *docker.Scraper) Dashboard {
 	service := app.Settings.Name
 
 	allReqChart := NewChart("Requests/min", chartColors.Green, UnitCount, func() []float64 {
@@ -122,6 +123,7 @@ func NewDashboard(app *docker.Application, scraper *metrics.MetricsScraper, dock
 	memoryChart.Update()
 
 	return Dashboard{
+		namespace:     ns,
 		app:           app,
 		scraper:       scraper,
 		dockerScraper: dockerScraper,
@@ -187,6 +189,14 @@ func (m Dashboard) Update(msg tea.Msg) (Component, tea.Cmd) {
 			var cmd tea.Cmd
 			m.progress, cmd = m.progress.Update(msg)
 			cmds = append(cmds, cmd)
+		}
+	case NamespaceChangedMsg:
+		_ = m.namespace.Refresh(context.Background())
+		for _, app := range m.namespace.Applications() {
+			if app.Settings.Name == m.app.Settings.Name {
+				m.app = app
+				break
+			}
 		}
 	}
 
