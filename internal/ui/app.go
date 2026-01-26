@@ -20,7 +20,7 @@ type KeyMap struct {
 
 var DefaultKeyMap = KeyMap{
 	Accept:  key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "accept")),
-	Quit:    key.NewBinding(key.WithKeys("esc", "ctrl+c"), key.WithHelp("esc", "cancel")),
+	Quit:    key.NewBinding(key.WithKeys("ctrl+c"), key.WithHelp("ctrl+c", "quit")),
 	PrevApp: key.NewBinding(key.WithKeys("left", "h"), key.WithHelp("←/h", "previous app")),
 	NextApp: key.NewBinding(key.WithKeys("right", "l"), key.WithHelp("→/l", "next app")),
 }
@@ -34,6 +34,9 @@ type Component interface {
 type NamespaceChangedMsg struct{}
 type scrapeTickMsg struct{}
 type scrapeDoneMsg struct{}
+type navigateToInstallMsg struct{}
+type navigateToDashboardMsg struct{}
+type quitMsg struct{}
 
 type App struct {
 	namespace      *docker.Namespace
@@ -120,6 +123,22 @@ func (m App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.runScrape()
 	case scrapeDoneMsg:
 		return m, tea.Tick(5*time.Second, func(time.Time) tea.Msg { return scrapeTickMsg{} })
+	case navigateToInstallMsg:
+		m.currentScreen = NewInstall()
+		m.currentScreen, _ = m.currentScreen.Update(m.lastSize)
+		return m, m.currentScreen.Init()
+	case navigateToDashboardMsg:
+		apps := m.namespace.Applications()
+		if len(apps) > 0 && m.currentIndex < len(apps) {
+			m.currentScreen = NewDashboard(apps[m.currentIndex], m.scraper, m.dockerScraper)
+		} else {
+			m.currentScreen = NewEmptyState()
+		}
+		m.currentScreen, _ = m.currentScreen.Update(m.lastSize)
+		return m, m.currentScreen.Init()
+	case quitMsg:
+		m.shutdown()
+		return m, tea.Quit
 	}
 
 	var cmd tea.Cmd

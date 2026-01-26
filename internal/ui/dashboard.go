@@ -31,21 +31,23 @@ var chartColors = struct {
 
 type dashboardKeyMap struct {
 	Upgrade key.Binding
+	NewApp  key.Binding
 	PrevApp key.Binding
 	NextApp key.Binding
 	Quit    key.Binding
 }
 
 func (k dashboardKeyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.PrevApp, k.NextApp, k.Upgrade, k.Quit}
+	return []key.Binding{k.PrevApp, k.NextApp, k.NewApp, k.Upgrade, k.Quit}
 }
 
 func (k dashboardKeyMap) FullHelp() [][]key.Binding {
-	return [][]key.Binding{{k.PrevApp, k.NextApp, k.Upgrade, k.Quit}}
+	return [][]key.Binding{{k.PrevApp, k.NextApp, k.NewApp, k.Upgrade, k.Quit}}
 }
 
 var dashboardKeys = dashboardKeyMap{
 	Upgrade: key.NewBinding(key.WithKeys("u"), key.WithHelp("u", "upgrade")),
+	NewApp:  key.NewBinding(key.WithKeys("n"), key.WithHelp("n", "new app")),
 	PrevApp: key.NewBinding(key.WithKeys("left", "h"), key.WithHelp("←/h", "prev app")),
 	NextApp: key.NewBinding(key.WithKeys("right", "l"), key.WithHelp("→/l", "next app")),
 	Quit:    key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "quit")),
@@ -155,6 +157,12 @@ func (m Dashboard) Update(msg tea.Msg) (Component, tea.Cmd) {
 			cmds = append(cmds, m.progress.Init())
 		}
 	case tea.KeyMsg:
+		if key.Matches(msg, dashboardKeys.Quit) {
+			return m, func() tea.Msg { return quitMsg{} }
+		}
+		if key.Matches(msg, dashboardKeys.NewApp) {
+			return m, func() tea.Msg { return navigateToInstallMsg{} }
+		}
 		if key.Matches(msg, dashboardKeys.Upgrade) && !m.upgrading {
 			m.upgrading = true
 			m.progress = NewProgressBusy(m.width, lipgloss.Color("#6272a4"))
