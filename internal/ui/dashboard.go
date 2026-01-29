@@ -62,6 +62,8 @@ type Dashboard struct {
 	dockerScraper *docker.Scraper
 	width, height int
 	upgrading     bool
+	showingMenu   bool
+	settingsMenu  SettingsMenu
 	progress      ProgressBusy
 	help          help.Model
 	allReqChart   Chart
@@ -160,7 +162,17 @@ func (m Dashboard) Update(msg tea.Msg) (Component, tea.Cmd) {
 		if m.upgrading {
 			cmds = append(cmds, m.progress.Init())
 		}
+		if m.showingMenu {
+			m.settingsMenu, _ = m.settingsMenu.Update(msg)
+		}
+
 	case tea.KeyMsg:
+		if m.showingMenu {
+			var cmd tea.Cmd
+			m.settingsMenu, cmd = m.settingsMenu.Update(msg)
+			return m, cmd
+		}
+
 		if key.Matches(msg, dashboardKeys.Quit) {
 			return m, func() tea.Msg { return quitMsg{} }
 		}
@@ -174,27 +186,43 @@ func (m Dashboard) Update(msg tea.Msg) (Component, tea.Cmd) {
 			return m, func() tea.Msg { return navigateToInstallMsg{} }
 		}
 		if key.Matches(msg, dashboardKeys.Settings) {
-			return m, func() tea.Msg { return navigateToSettingsMsg{app: m.app} }
+			m.showingMenu = true
+			m.settingsMenu = NewSettingsMenu(m.app)
+			m.settingsMenu, _ = m.settingsMenu.Update(tea.WindowSizeMsg{Width: m.width, Height: m.height})
+			return m, nil
 		}
 		if key.Matches(msg, dashboardKeys.Upgrade) && !m.upgrading {
 			m.upgrading = true
 			m.progress = NewProgressBusy(m.width, lipgloss.Color("#6272a4"))
 			return m, tea.Batch(m.progress.Init(), m.runUpgrade())
 		}
+
+	case SettingsMenuCloseMsg:
+		m.showingMenu = false
+
+	case SettingsMenuSelectMsg:
+		m.showingMenu = false
+		return m, func() tea.Msg {
+			return navigateToSettingsSectionMsg(msg)
+		}
+
 	case upgradeFinishedMsg:
 		m.upgrading = false
+
 	case dashboardTickMsg:
 		m.allReqChart.Update()
 		m.errorChart.Update()
 		m.cpuChart.Update()
 		m.memoryChart.Update()
 		cmds = append(cmds, tea.Tick(time.Second, func(time.Time) tea.Msg { return dashboardTickMsg{} }))
+
 	case progressBusyTickMsg:
 		if m.upgrading {
 			var cmd tea.Cmd
 			m.progress, cmd = m.progress.Update(msg)
 			cmds = append(cmds, cmd)
 		}
+
 	case NamespaceChangedMsg:
 		if app := m.namespace.Application(m.app.Settings.Name); app != nil {
 			m.app = app
@@ -267,6 +295,16 @@ func (m Dashboard) View() string {
 
 	topLayer := lipgloss.NewLayer(topContent)
 	bottomLayer := lipgloss.NewLayer(bottomContent).Y(m.height - bottomHeight)
+
+	if m.showingMenu {
+		menuBox := m.settingsMenu.View()
+		menuWidth := lipgloss.Width(menuBox)
+		menuHeight := lipgloss.Height(menuBox)
+		menuX := (m.width - menuWidth) / 2
+		menuY := (m.height - menuHeight) / 2
+		menuLayer := lipgloss.NewLayer(menuBox).X(menuX).Y(menuY)
+		return lipgloss.NewCanvas(topLayer, bottomLayer, menuLayer).Render()
+	}
 
 	return lipgloss.NewCanvas(topLayer, bottomLayer).Render()
 }

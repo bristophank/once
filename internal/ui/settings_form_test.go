@@ -10,178 +10,247 @@ import (
 	"github.com/basecamp/amar/internal/docker"
 )
 
-func TestSettingsForm_InitialState_NonLocalhost(t *testing.T) {
+func TestSettingsFormApplication_InitialState_NonLocalhost(t *testing.T) {
 	settings := docker.ApplicationSettings{
 		Image:      "nginx:latest",
 		Host:       "app.example.com",
 		DisableTLS: false,
 	}
-	form := NewSettingsForm(settings)
+	form := NewSettingsFormApplication(settings)
 
-	assert.Equal(t, settingsFieldImage, form.focused)
+	assert.Equal(t, applicationFieldImage, form.focused)
 	assert.Equal(t, "nginx:latest", form.imageInput.Value())
 	assert.Equal(t, "app.example.com", form.hostnameInput.Value())
 	assert.True(t, form.settings.TLSEnabled())
 }
 
-func TestSettingsForm_InitialState_Localhost(t *testing.T) {
+func TestSettingsFormApplication_InitialState_Localhost(t *testing.T) {
 	settings := docker.ApplicationSettings{
 		Image:      "nginx:latest",
 		Host:       "chat.localhost",
 		DisableTLS: false,
 	}
-	form := NewSettingsForm(settings)
+	form := NewSettingsFormApplication(settings)
 
 	assert.Equal(t, "chat.localhost", form.hostnameInput.Value())
 	assert.False(t, form.settings.TLSEnabled(), "TLS should be disabled for localhost even when DisableTLS is false")
 }
 
-func TestSettingsForm_TabNavigation(t *testing.T) {
-	form := NewSettingsForm(docker.ApplicationSettings{Host: "app.example.com"})
-	assert.Equal(t, settingsFieldImage, form.focused)
+func TestSettingsFormApplication_TabNavigation(t *testing.T) {
+	form := NewSettingsFormApplication(docker.ApplicationSettings{Host: "app.example.com"})
+	assert.Equal(t, applicationFieldImage, form.focused)
 
-	form = settingsPressTab(form)
-	assert.Equal(t, settingsFieldHostname, form.focused)
+	form = applicationPressTab(form)
+	assert.Equal(t, applicationFieldHostname, form.focused)
 
-	form = settingsPressTab(form)
-	assert.Equal(t, settingsFieldTLS, form.focused)
+	form = applicationPressTab(form)
+	assert.Equal(t, applicationFieldTLS, form.focused)
 
-	form = settingsPressTab(form)
-	assert.Equal(t, settingsFieldSMTPServer, form.focused)
+	form = applicationPressTab(form)
+	assert.Equal(t, applicationFieldDoneButton, form.focused)
 
-	form = settingsPressTab(form)
-	assert.Equal(t, settingsFieldSMTPPort, form.focused)
+	form = applicationPressTab(form)
+	assert.Equal(t, applicationFieldCancelButton, form.focused)
 
-	form = settingsPressTab(form)
-	assert.Equal(t, settingsFieldSMTPUsername, form.focused)
-
-	form = settingsPressTab(form)
-	assert.Equal(t, settingsFieldSMTPPassword, form.focused)
-
-	form = settingsPressTab(form)
-	assert.Equal(t, settingsFieldSMTPFrom, form.focused)
-
-	form = settingsPressTab(form)
-	assert.Equal(t, settingsFieldSaveButton, form.focused)
-
-	form = settingsPressTab(form)
-	assert.Equal(t, settingsFieldCancelButton, form.focused)
-
-	form = settingsPressTab(form)
-	assert.Equal(t, settingsFieldImage, form.focused)
+	form = applicationPressTab(form)
+	assert.Equal(t, applicationFieldImage, form.focused)
 }
 
-func TestSettingsForm_ShiftTabNavigation(t *testing.T) {
-	form := NewSettingsForm(docker.ApplicationSettings{Host: "app.example.com"})
+func TestSettingsFormApplication_ShiftTabNavigation(t *testing.T) {
+	form := NewSettingsFormApplication(docker.ApplicationSettings{Host: "app.example.com"})
 
-	form = settingsPressShiftTab(form)
-	assert.Equal(t, settingsFieldCancelButton, form.focused)
+	form = applicationPressShiftTab(form)
+	assert.Equal(t, applicationFieldCancelButton, form.focused)
 
-	form = settingsPressShiftTab(form)
-	assert.Equal(t, settingsFieldSaveButton, form.focused)
+	form = applicationPressShiftTab(form)
+	assert.Equal(t, applicationFieldDoneButton, form.focused)
 }
 
-func TestSettingsForm_SpaceTogglesTLS(t *testing.T) {
-	form := NewSettingsForm(docker.ApplicationSettings{Host: "app.example.com"})
+func TestSettingsFormApplication_SpaceTogglesTLS(t *testing.T) {
+	form := NewSettingsFormApplication(docker.ApplicationSettings{Host: "app.example.com"})
 	assert.True(t, form.settings.TLSEnabled())
 
-	// Tab twice to get to TLS field (Image -> Hostname -> TLS)
-	form = settingsPressTab(form)
-	form = settingsPressTab(form)
-	assert.Equal(t, settingsFieldTLS, form.focused)
+	form = applicationPressTab(form)
+	form = applicationPressTab(form)
+	assert.Equal(t, applicationFieldTLS, form.focused)
 
-	form = settingsPressSpace(form)
+	form = applicationPressSpace(form)
 	assert.False(t, form.settings.TLSEnabled())
 
-	form = settingsPressSpace(form)
+	form = applicationPressSpace(form)
 	assert.True(t, form.settings.TLSEnabled())
 }
 
-func TestSettingsForm_SpaceDoesNotToggleTLSForLocalhost(t *testing.T) {
-	form := NewSettingsForm(docker.ApplicationSettings{Host: "chat.localhost"})
+func TestSettingsFormApplication_SpaceDoesNotToggleTLSForLocalhost(t *testing.T) {
+	form := NewSettingsFormApplication(docker.ApplicationSettings{Host: "chat.localhost"})
 	assert.False(t, form.settings.TLSEnabled())
 
-	// Tab twice to get to TLS field
-	form = settingsPressTab(form)
-	form = settingsPressTab(form)
-	assert.Equal(t, settingsFieldTLS, form.focused)
+	form = applicationPressTab(form)
+	form = applicationPressTab(form)
+	assert.Equal(t, applicationFieldTLS, form.focused)
 
-	form = settingsPressSpace(form)
+	form = applicationPressSpace(form)
 	assert.False(t, form.settings.TLSEnabled(), "TLS should remain disabled for localhost")
 }
 
-func TestSettingsForm_TLSShowsDisabledForLocalhost(t *testing.T) {
-	form := NewSettingsForm(docker.ApplicationSettings{Host: "app.example.com"})
+func TestSettingsFormApplication_TLSShowsDisabledForLocalhost(t *testing.T) {
+	form := NewSettingsFormApplication(docker.ApplicationSettings{Host: "app.example.com"})
 	assert.True(t, form.settings.TLSEnabled())
 
-	// Tab to hostname field and change to localhost
-	form = settingsPressTab(form)
-	form = settingsTypeText(form, ".localhost")
+	form = applicationPressTab(form)
+	form = applicationTypeText(form, ".localhost")
 	assert.False(t, form.settings.TLSEnabled(), "TLS should show as disabled for localhost")
 
-	// Change back to non-localhost - TLS preference is preserved
-	form = settingsClearAndType(form, "app.example.com")
+	form = applicationClearAndType(form, "app.example.com")
 	assert.True(t, form.settings.TLSEnabled(), "TLS preference should be preserved")
 }
 
-func TestSettingsForm_Submit(t *testing.T) {
-	form := NewSettingsForm(docker.ApplicationSettings{
+func TestSettingsFormApplication_Submit(t *testing.T) {
+	form := NewSettingsFormApplication(docker.ApplicationSettings{
 		Name:  "myapp",
 		Image: "nginx:latest",
 		Host:  "app.example.com",
 	})
 
-	form.focused = settingsFieldSaveButton
-	_, cmd := form.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	form.focused = applicationFieldDoneButton
+	section, cmd := form.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	form = section.(SettingsFormApplication)
 	require.NotNil(t, cmd)
 
 	msg := cmd()
-	submitMsg, ok := msg.(SettingsFormSubmitMsg)
-	require.True(t, ok, "expected SettingsFormSubmitMsg, got %T", msg)
+	submitMsg, ok := msg.(SettingsSectionSubmitMsg)
+	require.True(t, ok, "expected SettingsSectionSubmitMsg, got %T", msg)
 	assert.Equal(t, "myapp", submitMsg.Settings.Name)
 	assert.Equal(t, "nginx:latest", submitMsg.Settings.Image)
 	assert.Equal(t, "app.example.com", submitMsg.Settings.Host)
 	assert.False(t, submitMsg.Settings.DisableTLS)
 }
 
-func TestSettingsForm_Cancel(t *testing.T) {
-	form := NewSettingsForm(docker.ApplicationSettings{Host: "app.example.com"})
+func TestSettingsFormApplication_Cancel(t *testing.T) {
+	form := NewSettingsFormApplication(docker.ApplicationSettings{Host: "app.example.com"})
 
-	form.focused = settingsFieldCancelButton
+	form.focused = applicationFieldCancelButton
 	_, cmd := form.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	require.NotNil(t, cmd)
 
 	msg := cmd()
-	_, ok := msg.(SettingsFormCancelMsg)
-	assert.True(t, ok, "expected SettingsFormCancelMsg, got %T", msg)
+	_, ok := msg.(SettingsSectionCancelMsg)
+	assert.True(t, ok, "expected SettingsSectionCancelMsg, got %T", msg)
+}
+
+func TestSettingsFormEmail_InitialState(t *testing.T) {
+	settings := docker.ApplicationSettings{
+		SMTP: docker.SMTPSettings{
+			Server:   "smtp.example.com",
+			Port:     "587",
+			Username: "user@example.com",
+			Password: "secret",
+			From:     "noreply@example.com",
+		},
+	}
+	form := NewSettingsFormEmail(settings)
+
+	assert.Equal(t, emailFieldServer, form.focused)
+	assert.Equal(t, "smtp.example.com", form.serverInput.Value())
+	assert.Equal(t, "587", form.portInput.Value())
+	assert.Equal(t, "user@example.com", form.usernameInput.Value())
+	assert.Equal(t, "secret", form.passwordInput.Value())
+	assert.Equal(t, "noreply@example.com", form.fromInput.Value())
+}
+
+func TestSettingsFormEmail_TabNavigation(t *testing.T) {
+	form := NewSettingsFormEmail(docker.ApplicationSettings{})
+	assert.Equal(t, emailFieldServer, form.focused)
+
+	form = emailPressTab(form)
+	assert.Equal(t, emailFieldPort, form.focused)
+
+	form = emailPressTab(form)
+	assert.Equal(t, emailFieldUsername, form.focused)
+
+	form = emailPressTab(form)
+	assert.Equal(t, emailFieldPassword, form.focused)
+
+	form = emailPressTab(form)
+	assert.Equal(t, emailFieldFrom, form.focused)
+
+	form = emailPressTab(form)
+	assert.Equal(t, emailFieldDoneButton, form.focused)
+
+	form = emailPressTab(form)
+	assert.Equal(t, emailFieldCancelButton, form.focused)
+
+	form = emailPressTab(form)
+	assert.Equal(t, emailFieldServer, form.focused)
+}
+
+func TestSettingsFormEmail_Submit(t *testing.T) {
+	settings := docker.ApplicationSettings{
+		Name: "myapp",
+		SMTP: docker.SMTPSettings{
+			Server: "smtp.example.com",
+			Port:   "587",
+		},
+	}
+	form := NewSettingsFormEmail(settings)
+
+	form.focused = emailFieldDoneButton
+	section, cmd := form.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	form = section.(SettingsFormEmail)
+	require.NotNil(t, cmd)
+
+	msg := cmd()
+	submitMsg, ok := msg.(SettingsSectionSubmitMsg)
+	require.True(t, ok, "expected SettingsSectionSubmitMsg, got %T", msg)
+	assert.Equal(t, "myapp", submitMsg.Settings.Name)
+	assert.Equal(t, "smtp.example.com", submitMsg.Settings.SMTP.Server)
+	assert.Equal(t, "587", submitMsg.Settings.SMTP.Port)
+}
+
+func TestSettingsFormEmail_Cancel(t *testing.T) {
+	form := NewSettingsFormEmail(docker.ApplicationSettings{})
+
+	form.focused = emailFieldCancelButton
+	_, cmd := form.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	require.NotNil(t, cmd)
+
+	msg := cmd()
+	_, ok := msg.(SettingsSectionCancelMsg)
+	assert.True(t, ok, "expected SettingsSectionCancelMsg, got %T", msg)
 }
 
 // Helpers
 
-func settingsTypeText(form SettingsForm, text string) SettingsForm {
+func applicationTypeText(form SettingsFormApplication, text string) SettingsFormApplication {
 	for _, r := range text {
-		form, _ = form.Update(tea.KeyPressMsg{Code: r, Text: string(r)})
+		section, _ := form.Update(tea.KeyPressMsg{Code: r, Text: string(r)})
+		form = section.(SettingsFormApplication)
 	}
 	return form
 }
 
-func settingsClearAndType(form SettingsForm, text string) SettingsForm {
+func applicationClearAndType(form SettingsFormApplication, text string) SettingsFormApplication {
 	form.hostnameInput.SetValue("")
 	form.settings.Host = ""
-	return settingsTypeText(form, text)
+	return applicationTypeText(form, text)
 }
 
-func settingsPressTab(form SettingsForm) SettingsForm {
-	form, _ = form.Update(tea.KeyPressMsg{Code: tea.KeyTab})
-	return form
+func applicationPressTab(form SettingsFormApplication) SettingsFormApplication {
+	section, _ := form.Update(tea.KeyPressMsg{Code: tea.KeyTab})
+	return section.(SettingsFormApplication)
 }
 
-func settingsPressShiftTab(form SettingsForm) SettingsForm {
-	form, _ = form.Update(tea.KeyPressMsg{Code: tea.KeyTab, Mod: tea.ModShift})
-	return form
+func applicationPressShiftTab(form SettingsFormApplication) SettingsFormApplication {
+	section, _ := form.Update(tea.KeyPressMsg{Code: tea.KeyTab, Mod: tea.ModShift})
+	return section.(SettingsFormApplication)
 }
 
-func settingsPressSpace(form SettingsForm) SettingsForm {
-	form, _ = form.Update(tea.KeyPressMsg{Code: tea.KeySpace})
-	return form
+func applicationPressSpace(form SettingsFormApplication) SettingsFormApplication {
+	section, _ := form.Update(tea.KeyPressMsg{Code: tea.KeySpace})
+	return section.(SettingsFormApplication)
+}
+
+func emailPressTab(form SettingsFormEmail) SettingsFormEmail {
+	section, _ := form.Update(tea.KeyPressMsg{Code: tea.KeyTab})
+	return section.(SettingsFormEmail)
 }

@@ -33,9 +33,20 @@ type scrapeDoneMsg struct{}
 type navigateToInstallMsg struct{}
 type navigateToDashboardMsg struct{}
 type navigateToAppMsg struct{ app *docker.Application }
-type navigateToSettingsMsg struct{ app *docker.Application }
+type navigateToSettingsSectionMsg struct {
+	app     *docker.Application
+	section SettingsSectionType
+}
 type quitMsg struct{}
 type switchAppMsg struct{ delta int }
+
+type SettingsSectionType int
+
+const (
+	SettingsSectionApplication SettingsSectionType = iota
+	SettingsSectionEmail
+	SettingsSectionEnvironment
+)
 
 type App struct {
 	namespace      *docker.Namespace
@@ -138,8 +149,8 @@ func (m App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.shutdown()
 		return m, tea.Quit
-	case navigateToSettingsMsg:
-		m.currentScreen = NewSettings(m.namespace, msg.app)
+	case navigateToSettingsSectionMsg:
+		m.currentScreen = NewSettings(m.namespace, msg.app, msg.section)
 		m.currentScreen, _ = m.currentScreen.Update(m.lastSize)
 		return m, m.currentScreen.Init()
 	case quitMsg:

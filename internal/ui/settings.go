@@ -11,6 +11,19 @@ import (
 	"github.com/basecamp/amar/internal/docker"
 )
 
+type SettingsSection interface {
+	Init() tea.Cmd
+	Update(tea.Msg) (SettingsSection, tea.Cmd)
+	View() string
+	Title() string
+}
+
+type SettingsSectionSubmitMsg struct {
+	Settings docker.ApplicationSettings
+}
+
+type SettingsSectionCancelMsg struct{}
+
 type settingsKeyMap struct {
 	Back key.Binding
 }
@@ -40,7 +53,8 @@ type Settings struct {
 	width, height int
 	help          help.Model
 	state         settingsState
-	form          SettingsForm
+	section       SettingsSection
+	sectionType   SettingsSectionType
 	progress      ProgressBusy
 }
 
@@ -48,18 +62,29 @@ type settingsDeployFinishedMsg struct {
 	err error
 }
 
-func NewSettings(ns *docker.Namespace, app *docker.Application) Settings {
+func NewSettings(ns *docker.Namespace, app *docker.Application, sectionType SettingsSectionType) Settings {
+	var section SettingsSection
+	switch sectionType {
+	case SettingsSectionApplication:
+		section = NewSettingsFormApplication(app.Settings)
+	case SettingsSectionEmail:
+		section = NewSettingsFormEmail(app.Settings)
+	case SettingsSectionEnvironment:
+		section = NewSettingsFormEnvironment(app.Settings)
+	}
+
 	return Settings{
-		namespace: ns,
-		app:       app,
-		help:      help.New(),
-		state:     settingsStateForm,
-		form:      NewSettingsForm(app.Settings),
+		namespace:   ns,
+		app:         app,
+		help:        help.New(),
+		state:       settingsStateForm,
+		section:     section,
+		sectionType: sectionType,
 	}
 }
 
 func (m Settings) Init() tea.Cmd {
-	return m.form.Init()
+	return m.section.Init()
 }
 
 func (m Settings) Update(msg tea.Msg) (Component, tea.Cmd) {
@@ -71,7 +96,7 @@ func (m Settings) Update(msg tea.Msg) (Component, tea.Cmd) {
 		m.help.SetWidth(m.width)
 		m.progress = NewProgressBusy(m.width, lipgloss.Color("#6272a4"))
 		if m.state == settingsStateForm {
-			m.form, _ = m.form.Update(msg)
+			m.section, _ = m.section.Update(msg)
 		}
 		if m.state == settingsStateDeploying {
 			cmds = append(cmds, m.progress.Init())
@@ -82,10 +107,10 @@ func (m Settings) Update(msg tea.Msg) (Component, tea.Cmd) {
 			return m, func() tea.Msg { return navigateToDashboardMsg{} }
 		}
 
-	case SettingsFormCancelMsg:
+	case SettingsSectionCancelMsg:
 		return m, func() tea.Msg { return navigateToDashboardMsg{} }
 
-	case SettingsFormSubmitMsg:
+	case SettingsSectionSubmitMsg:
 		if msg.Settings.Equal(m.app.Settings) {
 			return m, func() tea.Msg { return navigateToDashboardMsg{} }
 		}
@@ -107,7 +132,7 @@ func (m Settings) Update(msg tea.Msg) (Component, tea.Cmd) {
 
 	var cmd tea.Cmd
 	if m.state == settingsStateForm {
-		m.form, cmd = m.form.Update(msg)
+		m.section, cmd = m.section.Update(msg)
 		cmds = append(cmds, cmd)
 	}
 
@@ -116,11 +141,11 @@ func (m Settings) Update(msg tea.Msg) (Component, tea.Cmd) {
 
 func (m Settings) View() string {
 	title := Styles.Title.Width(m.width).Align(lipgloss.Center).Render(m.app.Settings.Name)
-	subtitle := Styles.SubTitle.Width(m.width).Align(lipgloss.Center).Render("Settings")
+	subtitle := Styles.SubTitle.Width(m.width).Align(lipgloss.Center).Render(m.section.Title())
 
 	var contentView string
 	if m.state == settingsStateForm {
-		contentView = m.form.View()
+		contentView = m.section.View()
 	} else {
 		contentView = m.progress.View()
 	}
