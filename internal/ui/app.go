@@ -38,6 +38,7 @@ type navigateToSettingsSectionMsg struct {
 	app     *docker.Application
 	section SettingsSectionType
 }
+type navigateToLogsMsg struct{ app *docker.Application }
 type quitMsg struct{}
 type switchAppMsg struct{ delta int }
 
@@ -156,6 +157,10 @@ func (m App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 	case navigateToSettingsSectionMsg:
 		m.currentScreen = NewSettings(m.namespace, msg.app, msg.section)
+		m.currentScreen, _ = m.currentScreen.Update(m.lastSize)
+		return m, m.currentScreen.Init()
+	case navigateToLogsMsg:
+		m.currentScreen = NewLogs(m.namespace, msg.app)
 		m.currentScreen, _ = m.currentScreen.Update(m.lastSize)
 		return m, m.currentScreen.Init()
 	case quitMsg:
