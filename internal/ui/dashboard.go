@@ -56,21 +56,24 @@ var dashboardKeys = dashboardKeyMap{
 	Quit:     key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "quit")),
 }
 
+// dashboardState holds state that Content render functions need access to.
+// Using a pointer allows closures to see current values.
+type dashboardState struct {
+	app       *docker.Application
+	upgrading bool
+	progress  ProgressBusy
+	help      help.Model
+}
+
 type Dashboard struct {
 	namespace     *docker.Namespace
-	app           *docker.Application
 	scraper       *metrics.MetricsScraper
 	dockerScraper *docker.Scraper
 	width, height int
-	upgrading     bool
 	showingMenu   bool
 	settingsMenu  SettingsMenu
-	progress      ProgressBusy
-	help          help.Model
-	allReqChart   Chart
-	errorChart    Chart
-	cpuChart      Chart
-	memoryChart   Chart
+	state         *dashboardState
+	layout        StackLayout
 }
 
 type dashboardTickMsg struct{}
@@ -81,6 +84,24 @@ type upgradeFinishedMsg struct {
 
 func NewDashboard(ns *docker.Namespace, app *docker.Application, scraper *metrics.MetricsScraper, dockerScraper *docker.Scraper) Dashboard {
 	service := app.Settings.Name
+
+	state := &dashboardState{
+		app:  app,
+		help: help.New(),
+	}
+
+	header := NewContent(func(width, height int) string {
+		return renderInfoBox(width, state.app, state.upgrading)
+	})
+
+	footer := NewContent(func(width, height int) string {
+		helpView := state.help.View(dashboardKeys)
+		helpLine := lipgloss.NewStyle().Width(width).Align(lipgloss.Center).Render(helpView)
+		if state.upgrading {
+			return state.progress.View() + "\n" + helpLine
+		}
+		return helpLine
+	})
 
 	allReqChart := NewChart("Requests/min", chartColors.Green, UnitCount, func() []float64 {
 		samples := scraper.Fetch(service, ChartHistoryLength)
@@ -122,21 +143,36 @@ func NewDashboard(ns *docker.Namespace, app *docker.Application, scraper *metric
 		return data
 	})
 
-	allReqChart.Update()
-	errorChart.Update()
-	cpuChart.Update()
-	memoryChart.Update()
+	allReqChart.refreshData()
+	errorChart.refreshData()
+	cpuChart.refreshData()
+	memoryChart.refreshData()
+
+	chartRow1 := NewStackLayout(Horizontal,
+		WithPercent(50, allReqChart),
+		WithFill(errorChart),
+	)
+	chartRow2 := NewStackLayout(Horizontal,
+		WithPercent(50, cpuChart),
+		WithFill(memoryChart),
+	)
+	chartsLayout := NewStackLayout(Vertical,
+		WithPercent(50, chartRow1),
+		WithFill(chartRow2),
+	)
+
+	layout := NewStackLayout(Vertical,
+		StackChild{Component: header, Size: Fit()},
+		StackChild{Component: chartsLayout, Size: Fill()},
+		StackChild{Component: footer, Size: Fit()},
+	)
 
 	return Dashboard{
 		namespace:     ns,
-		app:           app,
 		scraper:       scraper,
 		dockerScraper: dockerScraper,
-		help:          help.New(),
-		allReqChart:   allReqChart,
-		errorChart:    errorChart,
-		cpuChart:      cpuChart,
-		memoryChart:   memoryChart,
+		state:         state,
+		layout:        layout,
 	}
 }
 
@@ -150,15 +186,26 @@ func (m Dashboard) Update(msg tea.Msg) (Component, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
-		m.progress = NewProgressBusy(m.width, lipgloss.Color("#6272a4"))
-		m.help.SetWidth(m.width)
+		m.state.progress = NewProgressBusy(m.width, lipgloss.Color("#6272a4"))
+		m.state.help.SetWidth(m.width)
 
-		if m.upgrading {
-			cmds = append(cmds, m.progress.Init())
+		updated, _ := m.layout.Update(ComponentSizeMsg{Width: m.width, Height: m.height})
+		m.layout = updated.(StackLayout)
+
+		if m.state.upgrading {
+			cmds = append(cmds, m.state.progress.Init())
 		}
 		if m.showingMenu {
 			m.settingsMenu, _ = m.settingsMenu.Update(msg)
 		}
+
+	case ComponentSizeMsg:
+		m.width, m.height = msg.Width, msg.Height
+		m.state.progress = NewProgressBusy(m.width, lipgloss.Color("#6272a4"))
+		m.state.help.SetWidth(m.width)
+
+		updated, _ := m.layout.Update(msg)
+		m.layout = updated.(StackLayout)
 
 	case tea.KeyMsg:
 		if m.showingMenu {
@@ -181,17 +228,17 @@ func (m Dashboard) Update(msg tea.Msg) (Component, tea.Cmd) {
 		}
 		if key.Matches(msg, dashboardKeys.Settings) {
 			m.showingMenu = true
-			m.settingsMenu = NewSettingsMenu(m.app)
+			m.settingsMenu = NewSettingsMenu(m.state.app)
 			m.settingsMenu, _ = m.settingsMenu.Update(tea.WindowSizeMsg{Width: m.width, Height: m.height})
 			return m, nil
 		}
-		if key.Matches(msg, dashboardKeys.Upgrade) && !m.upgrading {
-			m.upgrading = true
-			m.progress = NewProgressBusy(m.width, lipgloss.Color("#6272a4"))
-			return m, tea.Batch(m.progress.Init(), m.runUpgrade())
+		if key.Matches(msg, dashboardKeys.Upgrade) && !m.state.upgrading {
+			m.state.upgrading = true
+			m.state.progress = NewProgressBusy(m.width, lipgloss.Color("#6272a4"))
+			return m, tea.Batch(m.state.progress.Init(), m.runUpgrade())
 		}
 		if key.Matches(msg, dashboardKeys.Logs) {
-			return m, func() tea.Msg { return navigateToLogsMsg{app: m.app} }
+			return m, func() tea.Msg { return navigateToLogsMsg{app: m.state.app} }
 		}
 
 	case SettingsMenuCloseMsg:
@@ -204,27 +251,25 @@ func (m Dashboard) Update(msg tea.Msg) (Component, tea.Cmd) {
 		}
 
 	case upgradeFinishedMsg:
-		m.upgrading = false
+		m.state.upgrading = false
 
 	case dashboardTickMsg:
 		cmds = append(cmds, tea.Tick(time.Second, func(time.Time) tea.Msg { return dashboardTickMsg{} }))
 
 	case scrapeDoneMsg:
-		m.allReqChart.Update()
-		m.errorChart.Update()
-		m.cpuChart.Update()
-		m.memoryChart.Update()
+		updated, _ := m.layout.Update(ChartRefreshMsg{})
+		m.layout = updated.(StackLayout)
 
 	case progressBusyTickMsg:
-		if m.upgrading {
+		if m.state.upgrading {
 			var cmd tea.Cmd
-			m.progress, cmd = m.progress.Update(msg)
+			m.state.progress, cmd = m.state.progress.Update(msg)
 			cmds = append(cmds, cmd)
 		}
 
 	case namespaceChangedMsg:
-		if app := m.namespace.Application(m.app.Settings.Name); app != nil {
-			m.app = app
+		if app := m.namespace.Application(m.state.app.Settings.Name); app != nil {
+			m.state.app = app
 		}
 	}
 
@@ -232,56 +277,35 @@ func (m Dashboard) Update(msg tea.Msg) (Component, tea.Cmd) {
 }
 
 func (m Dashboard) View() string {
-	infoBox := m.renderInfoBox()
-	helpLine := m.renderHelpLine()
-
-	var bottomContent string
-	if m.upgrading {
-		bottomContent = m.progress.View() + "\n" + helpLine
-	} else {
-		bottomContent = helpLine
-	}
-
-	// Calculate chart dimensions from remaining space
-	headerHeight := lipgloss.Height(infoBox)
-	footerHeight := lipgloss.Height(bottomContent)
-	availableHeight := m.height - headerHeight - footerHeight - 1
-	chartHeight := (availableHeight / 2) - 3
-	if chartHeight < 1 {
-		chartHeight = 1
-	}
-
-	leftChartWidth := m.width / 2
-	rightChartWidth := m.width - leftChartWidth
-
-	m.allReqChart.SetSize(leftChartWidth, chartHeight)
-	m.errorChart.SetSize(rightChartWidth, chartHeight)
-	m.cpuChart.SetSize(leftChartWidth, chartHeight)
-	m.memoryChart.SetSize(rightChartWidth, chartHeight)
-
-	charts := m.renderCharts()
-
-	topContent := infoBox + "\n" + charts
-	topLayer := lipgloss.NewLayer(topContent)
-	bottomLayer := lipgloss.NewLayer(bottomContent).Y(m.height - footerHeight)
+	content := m.layout.View()
 
 	if m.showingMenu {
+		contentLayer := lipgloss.NewLayer(content)
 		menuLayer := CenteredLayer(m.settingsMenu.View(), m.width, m.height)
-		return lipgloss.NewCanvas(topLayer, bottomLayer, menuLayer).Render()
+		return lipgloss.NewCanvas(contentLayer, menuLayer).Render()
 	}
 
-	return lipgloss.NewCanvas(topLayer, bottomLayer).Render()
+	return content
 }
 
 // Private
 
-func (m Dashboard) renderInfoBox() string {
+func (m Dashboard) runUpgrade() tea.Cmd {
+	return func() tea.Msg {
+		err := m.state.app.Update(context.Background(), nil)
+		return upgradeFinishedMsg{err: err}
+	}
+}
+
+// Helpers
+
+func renderInfoBox(width int, app *docker.Application, upgrading bool) string {
 	var status string
 	var statusColor color.Color
-	if m.upgrading {
+	if upgrading {
 		status = "upgrading..."
 		statusColor = lipgloss.Color("#f1fa8c")
-	} else if m.app.Running {
+	} else if app.Running {
 		status = "running"
 		statusColor = lipgloss.Color("#50fa7b")
 	} else {
@@ -292,37 +316,17 @@ func (m Dashboard) renderInfoBox() string {
 	stateStyle := lipgloss.NewStyle().Foreground(statusColor)
 	stateDisplay := fmt.Sprintf("State: %s", stateStyle.Render(status))
 
-	if m.app.Running && !m.app.RunningSince.IsZero() && !m.upgrading {
-		stateDisplay += fmt.Sprintf(" (up %s)", formatDuration(time.Since(m.app.RunningSince)))
+	if app.Running && !app.RunningSince.IsZero() && !upgrading {
+		stateDisplay += fmt.Sprintf(" (up %s)", formatDuration(time.Since(app.RunningSince)))
 	}
 
 	var extraLines []string
 	extraLines = append(extraLines, stateDisplay)
-	if url := m.app.Settings.URL(); url != "" {
+	if url := app.Settings.URL(); url != "" {
 		extraLines = append(extraLines, fmt.Sprintf("URL: %s", url))
 	}
-	return Styles.TitleBox(m.width, m.app.Settings.Name, extraLines...)
+	return Styles.TitleBox(width, app.Settings.Name, extraLines...)
 }
-
-func (m Dashboard) renderHelpLine() string {
-	helpView := m.help.View(dashboardKeys)
-	return lipgloss.NewStyle().Width(m.width).Align(lipgloss.Center).Render(helpView)
-}
-
-func (m Dashboard) renderCharts() string {
-	row1 := lipgloss.JoinHorizontal(lipgloss.Top, m.allReqChart.View(), m.errorChart.View())
-	row2 := lipgloss.JoinHorizontal(lipgloss.Top, m.cpuChart.View(), m.memoryChart.View())
-	return lipgloss.JoinVertical(lipgloss.Left, row1, row2)
-}
-
-func (m Dashboard) runUpgrade() tea.Cmd {
-	return func() tea.Msg {
-		err := m.app.Update(context.Background(), nil)
-		return upgradeFinishedMsg{err: err}
-	}
-}
-
-// Helpers
 
 func formatDuration(d time.Duration) string {
 	if d < time.Minute {

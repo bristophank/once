@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 )
 
@@ -84,18 +85,37 @@ func NewChart(title string, color lipgloss.Style, unit UnitType, dataSource Data
 	}
 }
 
-func (c *Chart) Update() {
-	c.data = c.dataSource()
+func (c Chart) Init() tea.Cmd {
+	return nil
 }
 
-func (c *Chart) SetSize(w, h int) {
-	c.width = w
-	c.height = h
+func (c Chart) Update(msg tea.Msg) (Component, tea.Cmd) {
+	switch msg := msg.(type) {
+	case ComponentSizeMsg:
+		c.width, c.height = msg.Width, msg.Height
+	case ChartRefreshMsg:
+		c.refreshData()
+	}
+	return c, nil
+}
+
+// ChartRefreshMsg tells a Chart to refresh its data from its data source
+type ChartRefreshMsg struct{}
+
+func (c *Chart) refreshData() {
+	c.data = c.dataSource()
 }
 
 func (c Chart) View() string {
 	if c.width == 0 || c.height == 0 {
 		return ""
+	}
+
+	// Account for border (2 chars width, 2 lines height) and title (1 line)
+	innerWidth := c.width - 2
+	chartRows := c.height - 2 - 1 // minus border, minus title
+	if chartRows < 1 {
+		chartRows = 1
 	}
 
 	// Ensure data fills the chart width (each chart char = 2 data points)
@@ -104,9 +124,6 @@ func (c Chart) View() string {
 	srcStart := max(0, len(c.data)-dataPoints)
 	dstStart := max(0, dataPoints-len(c.data))
 	copy(data[dstStart:], c.data[srcStart:])
-
-	// Account for border (2 chars width, 2 lines height)
-	innerWidth := c.width - 2
 
 	maxVal := maxValue(data)
 	displayMax := maxVal
@@ -124,7 +141,7 @@ func (c Chart) View() string {
 	}
 
 	// Each character row represents 4 vertical dots
-	dotsHeight := c.height * 4
+	dotsHeight := chartRows * 4
 
 	// Calculate the height in dots for each data point
 	heights := make([]int, len(data))
@@ -148,9 +165,9 @@ func (c Chart) View() string {
 	dataOffset := max(0, len(heights)-chartWidth*2)
 
 	labelStyle := lipgloss.NewStyle().Width(labelWidth).Align(lipgloss.Left)
-	for row := range c.height {
+	for row := range chartRows {
 		var sb strings.Builder
-		rowBottomDot := (c.height - 1 - row) * 4
+		rowBottomDot := (chartRows - 1 - row) * 4
 		rowTopDot := rowBottomDot + 4
 
 		for col := range chartWidth {
@@ -177,7 +194,7 @@ func (c Chart) View() string {
 		switch row {
 		case 0:
 			label = labelStyle.Render(maxLabel)
-		case c.height - 1:
+		case chartRows - 1:
 			label = labelStyle.Render("0")
 		default:
 			label = labelStyle.Render("")

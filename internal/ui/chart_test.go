@@ -22,8 +22,10 @@ func TestChartView(t *testing.T) {
 	}
 
 	chart := NewChart("Test", lipgloss.NewStyle(), UnitCount, func() []float64 { return data })
-	chart.SetSize(40, 8)
-	chart.Update()
+	updated, _ := chart.Update(ComponentSizeMsg{Width: 40, Height: 8})
+	chart = updated.(Chart)
+	updated, _ = chart.Update(ChartRefreshMsg{})
+	chart = updated.(Chart)
 	output := chart.View()
 
 	fmt.Println("\nChart output:")
