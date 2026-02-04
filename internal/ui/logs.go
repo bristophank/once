@@ -102,7 +102,7 @@ func (m Logs) Update(msg tea.Msg) (Component, tea.Cmd) {
 		m.checkForUpdates()
 		cmds = append(cmds, tea.Tick(100*time.Millisecond, func(time.Time) tea.Msg { return logsTickMsg{} }))
 
-	case NamespaceChangedMsg:
+	case namespaceChangedMsg:
 		containerName, err := m.app.ContainerName(context.Background())
 		if err == nil {
 			m.streamer.Start(context.Background(), containerName)

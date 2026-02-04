@@ -250,7 +250,7 @@ func (m Dashboard) Update(msg tea.Msg) (Component, tea.Cmd) {
 			cmds = append(cmds, cmd)
 		}
 
-	case NamespaceChangedMsg:
+	case namespaceChangedMsg:
 		if app := m.namespace.Application(m.app.Settings.Name); app != nil {
 			m.app = app
 		}

@@ -28,19 +28,23 @@ type Component interface {
 	View() string
 }
 
-type NamespaceChangedMsg struct{}
-type scrapeTickMsg struct{}
-type scrapeDoneMsg struct{}
-type navigateToInstallMsg struct{}
-type navigateToDashboardMsg struct{}
-type navigateToAppMsg struct{ app *docker.Application }
-type navigateToSettingsSectionMsg struct {
-	app     *docker.Application
-	section SettingsSectionType
-}
-type navigateToLogsMsg struct{ app *docker.Application }
-type quitMsg struct{}
-type switchAppMsg struct{ delta int }
+type (
+	namespaceChangedMsg          struct{}
+	scrapeTickMsg                struct{}
+	scrapeDoneMsg                struct{}
+	navigateToInstallMsg         struct{}
+	navigateToDashboardMsg       struct{}
+	navigateToAppMsg             struct{ app *docker.Application }
+	navigateToSettingsSectionMsg struct {
+		app     *docker.Application
+		section SettingsSectionType
+	}
+)
+type (
+	navigateToLogsMsg struct{ app *docker.Application }
+	quitMsg           struct{}
+	switchAppMsg      struct{ delta int }
+)
 
 type SettingsSectionType int
 
@@ -51,15 +55,15 @@ const (
 )
 
 type App struct {
-	namespace      *docker.Namespace
-	scraper        *metrics.MetricsScraper
-	dockerScraper  *docker.Scraper
-	currentIndex   int
-	currentScreen  Component
-	lastSize       tea.WindowSizeMsg
-	eventChan      <-chan struct{}
-	watchCtx       context.Context
-	watchCancel    context.CancelFunc
+	namespace     *docker.Namespace
+	scraper       *metrics.MetricsScraper
+	dockerScraper *docker.Scraper
+	currentIndex  int
+	currentScreen Component
+	lastSize      tea.WindowSizeMsg
+	eventChan     <-chan struct{}
+	watchCtx      context.Context
+	watchCancel   context.CancelFunc
 }
 
 func NewApp(ns *docker.Namespace) App {
@@ -90,14 +94,14 @@ func NewApp(ns *docker.Namespace) App {
 	}
 
 	return App{
-		namespace:      ns,
-		scraper:        scraper,
-		dockerScraper:  dockerScraper,
-		currentIndex:   0,
-		currentScreen:  screen,
-		eventChan:      eventChan,
-		watchCtx:       ctx,
-		watchCancel:    cancel,
+		namespace:     ns,
+		scraper:       scraper,
+		dockerScraper: dockerScraper,
+		currentIndex:  0,
+		currentScreen: screen,
+		eventChan:     eventChan,
+		watchCtx:      ctx,
+		watchCancel:   cancel,
 	}
 }
 
@@ -119,7 +123,7 @@ func (m App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.shutdown()
 			return m, tea.Quit
 		}
-	case NamespaceChangedMsg:
+	case namespaceChangedMsg:
 		_ = m.namespace.Refresh(m.watchCtx)
 		m.currentScreen, _ = m.currentScreen.Update(msg)
 		return m, m.watchForChanges()
@@ -239,6 +243,6 @@ func (m App) watchForChanges() tea.Cmd {
 		if !ok {
 			return nil
 		}
-		return NamespaceChangedMsg{}
+		return namespaceChangedMsg{}
 	}
 }
