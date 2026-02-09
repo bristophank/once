@@ -475,7 +475,7 @@ func assertContainerRunning(t *testing.T, ctx context.Context, name string, expe
 	}
 }
 
-func assertContainerResources(t *testing.T, ctx context.Context, name string, expectedNanoCPUs, expectedMemory int64) {
+func assertContainerResources(t *testing.T, ctx context.Context, name string, expectedCPUs, expectedMemory int64) {
 	t.Helper()
 	c, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	require.NoError(t, err)
@@ -484,7 +484,7 @@ func assertContainerResources(t *testing.T, ctx context.Context, name string, ex
 	info, err := c.ContainerInspect(ctx, name)
 	require.NoError(t, err)
 
-	assert.Equal(t, expectedNanoCPUs, info.HostConfig.NanoCPUs)
+	assert.Equal(t, expectedCPUs, info.HostConfig.NanoCPUs)
 	assert.Equal(t, expectedMemory, info.HostConfig.Memory)
 }
 
@@ -576,4 +576,3 @@ func extractTarGz(t *testing.T, r io.Reader) map[string][]byte {
 
 	return entries
 }
-

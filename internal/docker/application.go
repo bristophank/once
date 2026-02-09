@@ -359,14 +359,8 @@ func (a *Application) deployWithVolume(ctx context.Context, vol *ApplicationVolu
 		},
 	}
 	hostConfig.Resources = container.Resources{
-		Memory: int64(a.Settings.Resources.MemoryMB) * 1024 * 1024,
-	}
-	if cpus := a.Settings.Resources.CPUs; cpus > 0 {
-		if cpus == 1 {
-			hostConfig.CpusetCpus = "0"
-		} else {
-			hostConfig.CpusetCpus = fmt.Sprintf("0-%d", cpus-1)
-		}
+		Memory:   int64(a.Settings.Resources.MemoryMB) * 1024 * 1024,
+		NanoCPUs: int64(a.Settings.Resources.CPUs) * 1e9,
 	}
 
 	resp, err := a.namespace.client.ContainerCreate(ctx,
