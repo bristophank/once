@@ -7,12 +7,14 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/basecamp/once/internal/docker"
+	"github.com/basecamp/once/internal/logging"
 	"github.com/basecamp/once/internal/ui"
 )
 
 type RootCommand struct {
 	cmd       *cobra.Command
 	namespace string
+	cleanup   func()
 }
 
 func NewRootCommand() *RootCommand {
@@ -23,6 +25,19 @@ func NewRootCommand() *RootCommand {
 		SilenceUsage: true,
 		CompletionOptions: cobra.CompletionOptions{
 			HiddenDefaultCmd: true,
+		},
+		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+			cleanup, err := logging.SetupFile()
+			if err != nil {
+				return fmt.Errorf("setting up logging: %w", err)
+			}
+			r.cleanup = cleanup
+			return nil
+		},
+		PersistentPostRun: func(cmd *cobra.Command, args []string) {
+			if r.cleanup != nil {
+				r.cleanup()
+			}
 		},
 		RunE: WithNamespace(func(ns *docker.Namespace, cmd *cobra.Command, args []string) error {
 			return ui.Run(ns)
