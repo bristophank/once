@@ -258,7 +258,7 @@ func (n *Namespace) restoreState(ctx context.Context) error {
 
 func (n *Namespace) sortApplications() {
 	slices.SortFunc(n.applications, func(a, b *Application) int {
-		return strings.Compare(a.Settings.Name, b.Settings.Name)
+		return strings.Compare(a.Settings.Host, b.Settings.Host)
 	})
 }
 

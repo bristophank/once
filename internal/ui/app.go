@@ -34,7 +34,7 @@ type (
 	scrapeTickMsg                struct{}
 	scrapeDoneMsg                struct{}
 	navigateToInstallMsg         struct{}
-	navigateToDashboardMsg       struct{}
+	navigateToDashboardMsg       struct{ appName string }
 	navigateToAppMsg             struct{ app *docker.Application }
 	navigateToSettingsSectionMsg struct {
 		app     *docker.Application
@@ -44,7 +44,6 @@ type (
 type (
 	navigateToLogsMsg struct{ app *docker.Application }
 	quitMsg           struct{}
-	switchAppMsg      struct{ delta int }
 )
 
 type SettingsSectionType int
@@ -62,7 +61,6 @@ type App struct {
 	namespace     *docker.Namespace
 	scraper       *metrics.MetricsScraper
 	dockerScraper *docker.Scraper
-	currentIndex  int
 	currentScreen Component
 	lastSize      tea.WindowSizeMsg
 	eventChan     <-chan struct{}
@@ -92,7 +90,7 @@ func NewApp(ns *docker.Namespace) App {
 
 	var screen Component
 	if len(apps) > 0 {
-		screen = NewDashboard(ns, apps[0], scraper, dockerScraper)
+		screen = NewDashboard(ns, apps, 0, scraper, dockerScraper)
 	} else {
 		screen = NewInstall(ns)
 	}
@@ -101,7 +99,6 @@ func NewApp(ns *docker.Namespace) App {
 		namespace:     ns,
 		scraper:       scraper,
 		dockerScraper: dockerScraper,
-		currentIndex:  0,
 		currentScreen: screen,
 		eventChan:     eventChan,
 		watchCtx:      ctx,
@@ -145,20 +142,28 @@ func (m App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case navigateToAppMsg:
 		_ = m.namespace.Refresh(m.watchCtx)
 		apps := m.namespace.Applications()
+		targetIndex := 0
 		for i, app := range apps {
 			if app.Settings.Name == msg.app.Settings.Name {
-				m.currentIndex = i
+				targetIndex = i
 				break
 			}
 		}
-		m.currentScreen = NewDashboard(m.namespace, apps[m.currentIndex], m.scraper, m.dockerScraper)
+		m.currentScreen = NewDashboard(m.namespace, apps, targetIndex, m.scraper, m.dockerScraper)
 		m.currentScreen, _ = m.currentScreen.Update(m.lastSize)
 		return m, m.currentScreen.Init()
 	case navigateToDashboardMsg:
 		_ = m.namespace.Refresh(m.watchCtx)
 		apps := m.namespace.Applications()
-		if len(apps) > 0 && m.currentIndex < len(apps) {
-			m.currentScreen = NewDashboard(m.namespace, apps[m.currentIndex], m.scraper, m.dockerScraper)
+		if len(apps) > 0 {
+			selectedIndex := 0
+			for i, app := range apps {
+				if app.Settings.Name == msg.appName {
+					selectedIndex = i
+					break
+				}
+			}
+			m.currentScreen = NewDashboard(m.namespace, apps, selectedIndex, m.scraper, m.dockerScraper)
 			m.currentScreen, _ = m.currentScreen.Update(m.lastSize)
 			return m, m.currentScreen.Init()
 		}
@@ -175,8 +180,6 @@ func (m App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case quitMsg:
 		m.shutdown()
 		return m, tea.Quit
-	case switchAppMsg:
-		return m.switchApp(msg.delta)
 	}
 
 	var cmd tea.Cmd
@@ -221,29 +224,6 @@ func (m App) runScrape() tea.Cmd {
 		wg.Wait()
 		return scrapeDoneMsg{}
 	}
-}
-
-func (m App) switchApp(delta int) (tea.Model, tea.Cmd) {
-	apps := m.namespace.Applications()
-	if len(apps) == 0 {
-		return m, nil
-	}
-
-	newIndex := m.currentIndex + delta
-	if newIndex < 0 {
-		newIndex = len(apps) - 1
-	} else if newIndex >= len(apps) {
-		newIndex = 0
-	}
-
-	if newIndex == m.currentIndex {
-		return m, nil
-	}
-
-	m.currentIndex = newIndex
-	m.currentScreen = NewDashboard(m.namespace, apps[newIndex], m.scraper, m.dockerScraper)
-	m.currentScreen, _ = m.currentScreen.Update(m.lastSize)
-	return m, m.currentScreen.Init()
 }
 
 func (m App) watchForChanges() tea.Cmd {

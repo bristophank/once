@@ -136,7 +136,7 @@ func (m Settings) Update(msg tea.Msg) (Component, tea.Cmd) {
 		if m.state == settingsStateActionComplete {
 			if msg.Button == tea.MouseLeft {
 				if zi := zone.Get(m.doneButtonZoneID()); zi != nil && zi.InBounds(msg) {
-					return m, func() tea.Msg { return navigateToDashboardMsg{} }
+					return m, func() tea.Msg { return navigateToDashboardMsg{appName: m.app.Settings.Name} }
 				}
 			}
 		}
@@ -144,7 +144,7 @@ func (m Settings) Update(msg tea.Msg) (Component, tea.Cmd) {
 	case tea.KeyMsg:
 		if m.state == settingsStateActionComplete {
 			if key.Matches(msg, key.NewBinding(key.WithKeys("enter"))) {
-				return m, func() tea.Msg { return navigateToDashboardMsg{} }
+				return m, func() tea.Msg { return navigateToDashboardMsg{appName: m.app.Settings.Name} }
 			}
 			return m, nil
 		}
@@ -153,16 +153,16 @@ func (m Settings) Update(msg tea.Msg) (Component, tea.Cmd) {
 				m.err = nil
 			}
 			if key.Matches(msg, settingsKeys.Back) {
-				return m, func() tea.Msg { return navigateToDashboardMsg{} }
+				return m, func() tea.Msg { return navigateToDashboardMsg{appName: m.app.Settings.Name} }
 			}
 		}
 
 	case SettingsSectionCancelMsg:
-		return m, func() tea.Msg { return navigateToDashboardMsg{} }
+		return m, func() tea.Msg { return navigateToDashboardMsg{appName: m.app.Settings.Name} }
 
 	case SettingsSectionSubmitMsg:
 		if msg.Settings.Equal(m.app.Settings) {
-			return m, func() tea.Msg { return navigateToDashboardMsg{} }
+			return m, func() tea.Msg { return navigateToDashboardMsg{appName: m.app.Settings.Name} }
 		}
 		m.state = settingsStateDeploying
 		m.app.Settings = msg.Settings

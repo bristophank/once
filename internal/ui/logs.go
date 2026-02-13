@@ -157,7 +157,7 @@ func (m Logs) handleNormalKey(msg tea.KeyMsg) (Component, tea.Cmd) {
 	switch {
 	case key.Matches(msg, logsKeys.Back):
 		m.streamer.Stop()
-		return m, func() tea.Msg { return navigateToDashboardMsg{} }
+		return m, func() tea.Msg { return navigateToDashboardMsg{appName: m.app.Settings.Name} }
 
 	case key.Matches(msg, logsKeys.Filter):
 		m.filterActive = true

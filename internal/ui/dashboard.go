@@ -4,11 +4,11 @@ import (
 	"context"
 	"fmt"
 	"image/color"
-	"slices"
-	"strconv"
+	"strings"
 	"time"
 
 	"charm.land/bubbles/v2/key"
+	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
@@ -16,64 +16,53 @@ import (
 	"github.com/basecamp/once/internal/metrics"
 )
 
-var chartColors = struct {
-	Green  lipgloss.Style
-	Red    lipgloss.Style
-	Blue   lipgloss.Style
-	Purple lipgloss.Style
-}{
-	Green:  lipgloss.NewStyle().Foreground(Colors.Success),
-	Red:    lipgloss.NewStyle().Foreground(Colors.Error),
-	Blue:   lipgloss.NewStyle().Foreground(Colors.Info),
-	Purple: lipgloss.NewStyle().Foreground(Colors.Muted),
-}
+const (
+	PanelHeight = 10
+	PanelGap    = 1
+)
 
 type dashboardKeyMap struct {
+	Up        key.Binding
+	Down      key.Binding
 	Settings  key.Binding
 	StartStop key.Binding
 	NewApp    key.Binding
 	Logs      key.Binding
-	PrevApp   key.Binding
-	NextApp   key.Binding
 	Quit      key.Binding
 }
 
 func (k dashboardKeyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.PrevApp, k.NextApp, k.Settings, k.Logs, k.NewApp, k.StartStop, k.Quit}
+	return []key.Binding{k.Up, k.Down, k.Settings, k.Logs, k.NewApp, k.StartStop, k.Quit}
 }
 
 func (k dashboardKeyMap) FullHelp() [][]key.Binding {
-	return [][]key.Binding{{k.PrevApp, k.NextApp, k.Settings, k.Logs, k.NewApp, k.StartStop, k.Quit}}
+	return [][]key.Binding{{k.Up, k.Down, k.Settings, k.Logs, k.NewApp, k.StartStop, k.Quit}}
 }
 
 var dashboardKeys = dashboardKeyMap{
+	Up:        key.NewBinding(key.WithKeys("up", "k"), key.WithHelp("↑/k", "up")),
+	Down:      key.NewBinding(key.WithKeys("down", "j"), key.WithHelp("↓/j", "down")),
 	Settings:  key.NewBinding(key.WithKeys("s"), key.WithHelp("s", "settings")),
 	StartStop: key.NewBinding(key.WithKeys("o"), key.WithHelp("o", "start/stop")),
 	NewApp:    key.NewBinding(key.WithKeys("n"), key.WithHelp("n", "new app")),
 	Logs:      key.NewBinding(key.WithKeys("g"), key.WithHelp("g", "logs")),
-	PrevApp:   key.NewBinding(key.WithKeys("left", "h"), key.WithHelp("←/h", "prev app")),
-	NextApp:   key.NewBinding(key.WithKeys("right", "l"), key.WithHelp("→/l", "next app")),
 	Quit:      key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "quit")),
-}
-
-// dashboardState holds state that Content render functions need access to.
-// Using a pointer allows closures to see current values.
-type dashboardState struct {
-	app      *docker.Application
-	toggling bool
-	progress ProgressBusy
-	help     Help
 }
 
 type Dashboard struct {
 	namespace     *docker.Namespace
 	scraper       *metrics.MetricsScraper
 	dockerScraper *docker.Scraper
+	apps          []*docker.Application
+	selectedIndex int
 	width, height int
+	viewport      viewport.Model
+	toggling      bool
+	togglingApp   string
+	progress      ProgressBusy
+	help          Help
 	showingMenu   bool
 	settingsMenu  SettingsMenu
-	state         *dashboardState
-	layout        StackLayout
 }
 
 type dashboardTickMsg struct{}
@@ -82,97 +71,28 @@ type startStopFinishedMsg struct {
 	err error
 }
 
-func NewDashboard(ns *docker.Namespace, app *docker.Application, scraper *metrics.MetricsScraper, dockerScraper *docker.Scraper) Dashboard {
-	service := app.Settings.Name
+func NewDashboard(ns *docker.Namespace, apps []*docker.Application, selectedIndex int,
+	scraper *metrics.MetricsScraper, dockerScraper *docker.Scraper) Dashboard {
 
-	state := &dashboardState{
-		app:  app,
-		help: NewHelp(),
-	}
-
-	header := NewContent(func(width, height int) string {
-		return renderInfoBox(width, state.app, state.toggling)
-	})
-
-	footer := NewContent(func(width, height int) string {
-		helpView := state.help.View(dashboardKeys)
-		helpLine := Styles.HelpLine(width, helpView)
-		if state.toggling {
-			return state.progress.View() + "\n" + helpLine
-		}
-		return helpLine
-	})
-
-	allReqChart := NewChart("Requests/min", chartColors.Green, UnitCount, func() []float64 {
-		samples := scraper.Fetch(service, ChartHistoryLength)
-		data := make([]float64, len(samples))
-		for i, s := range samples {
-			data[i] = float64(s.Success + s.ClientErrors + s.ServerErrors)
-		}
-		slices.Reverse(data)
-		return SlidingSum(data, ChartSlidingWindow)
-	})
-
-	errorChart := NewChart("Errors/min", chartColors.Red, UnitCount, func() []float64 {
-		samples := scraper.Fetch(service, ChartHistoryLength)
-		data := make([]float64, len(samples))
-		for i, s := range samples {
-			data[i] = float64(s.ServerErrors)
-		}
-		slices.Reverse(data)
-		return SlidingSum(data, ChartSlidingWindow)
-	})
-
-	cpuChart := NewChart("CPU", chartColors.Blue, UnitPercent, func() []float64 {
-		samples := dockerScraper.Fetch(service, ChartHistoryLength)
-		data := make([]float64, len(samples))
-		for i, s := range samples {
-			data[i] = s.CPUPercent
-		}
-		slices.Reverse(data)
-		return data
-	})
-
-	memoryChart := NewChart("Memory", chartColors.Purple, UnitBytes, func() []float64 {
-		samples := dockerScraper.Fetch(service, ChartHistoryLength)
-		data := make([]float64, len(samples))
-		for i, s := range samples {
-			data[i] = float64(s.MemoryBytes)
-		}
-		slices.Reverse(data)
-		return data
-	})
-
-	allReqChart.refreshData()
-	errorChart.refreshData()
-	cpuChart.refreshData()
-	memoryChart.refreshData()
-
-	chartRow1 := NewStackLayout(Horizontal,
-		WithPercent(50, allReqChart),
-		WithFill(errorChart),
-	)
-	chartRow2 := NewStackLayout(Horizontal,
-		WithPercent(50, cpuChart),
-		WithFill(memoryChart),
-	)
-	chartsLayout := NewStackLayout(Vertical,
-		WithPercent(50, chartRow1),
-		WithFill(chartRow2),
-	)
-
-	layout := NewStackLayout(Vertical,
-		StackChild{Component: header, Size: Fit()},
-		StackChild{Component: chartsLayout, Size: Fill()},
-		StackChild{Component: footer, Size: Fit()},
-	)
+	vp := viewport.New()
+	vp.MouseWheelEnabled = true
+	vp.KeyMap.Up.SetEnabled(false)
+	vp.KeyMap.Down.SetEnabled(false)
+	vp.KeyMap.PageUp.SetEnabled(false)
+	vp.KeyMap.PageDown.SetEnabled(false)
+	vp.KeyMap.HalfPageUp.SetEnabled(false)
+	vp.KeyMap.HalfPageDown.SetEnabled(false)
+	vp.KeyMap.Left.SetEnabled(false)
+	vp.KeyMap.Right.SetEnabled(false)
 
 	return Dashboard{
 		namespace:     ns,
 		scraper:       scraper,
 		dockerScraper: dockerScraper,
-		state:         state,
-		layout:        layout,
+		apps:          apps,
+		selectedIndex: selectedIndex,
+		viewport:      vp,
+		help:          NewHelp(),
 	}
 }
 
@@ -186,11 +106,10 @@ func (m Dashboard) Update(msg tea.Msg) (Component, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
-		m.state.progress = NewProgressBusy(m.width, Colors.Border)
-		m.state.help.SetWidth(m.width)
-
-		updated, _ := m.layout.Update(ComponentSizeMsg{Width: m.width, Height: m.height})
-		m.layout = updated.(StackLayout)
+		m.progress = NewProgressBusy(m.width, Colors.Border)
+		m.help.SetWidth(m.width)
+		m.updateViewportSize()
+		m.rebuildViewportContent()
 
 		if m.showingMenu {
 			m.settingsMenu, _ = m.settingsMenu.Update(msg)
@@ -198,11 +117,10 @@ func (m Dashboard) Update(msg tea.Msg) (Component, tea.Cmd) {
 
 	case ComponentSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
-		m.state.progress = NewProgressBusy(m.width, Colors.Border)
-		m.state.help.SetWidth(m.width)
-
-		updated, _ := m.layout.Update(msg)
-		m.layout = updated.(StackLayout)
+		m.progress = NewProgressBusy(m.width, Colors.Border)
+		m.help.SetWidth(m.width)
+		m.updateViewportSize()
+		m.rebuildViewportContent()
 
 	case tea.MouseClickMsg:
 		if m.showingMenu {
@@ -210,9 +128,14 @@ func (m Dashboard) Update(msg tea.Msg) (Component, tea.Cmd) {
 			m.settingsMenu, cmd = m.settingsMenu.Update(msg)
 			return m, cmd
 		}
-		if cmd := m.state.help.Update(msg, dashboardKeys); cmd != nil {
+		if cmd := m.help.Update(msg, dashboardKeys); cmd != nil {
 			return m, cmd
 		}
+
+	case tea.MouseWheelMsg:
+		var cmd tea.Cmd
+		m.viewport, cmd = m.viewport.Update(msg)
+		cmds = append(cmds, cmd)
 
 	case tea.KeyMsg:
 		if m.showingMenu {
@@ -224,28 +147,43 @@ func (m Dashboard) Update(msg tea.Msg) (Component, tea.Cmd) {
 		if key.Matches(msg, dashboardKeys.Quit) {
 			return m, func() tea.Msg { return quitMsg{} }
 		}
-		if key.Matches(msg, dashboardKeys.PrevApp) {
-			return m, func() tea.Msg { return switchAppMsg{delta: -1} }
+		if key.Matches(msg, dashboardKeys.Up) {
+			if m.selectedIndex > 0 {
+				m.selectedIndex--
+				m.rebuildViewportContent()
+				m.scrollToSelection()
+			}
+			return m, nil
 		}
-		if key.Matches(msg, dashboardKeys.NextApp) {
-			return m, func() tea.Msg { return switchAppMsg{delta: 1} }
+		if key.Matches(msg, dashboardKeys.Down) {
+			if m.selectedIndex < len(m.apps)-1 {
+				m.selectedIndex++
+				m.rebuildViewportContent()
+				m.scrollToSelection()
+			}
+			return m, nil
 		}
 		if key.Matches(msg, dashboardKeys.NewApp) {
 			return m, func() tea.Msg { return navigateToInstallMsg{} }
 		}
-		if key.Matches(msg, dashboardKeys.Settings) {
+		if key.Matches(msg, dashboardKeys.Settings) && len(m.apps) > 0 {
+			app := m.apps[m.selectedIndex]
 			m.showingMenu = true
-			m.settingsMenu = NewSettingsMenu(m.state.app)
+			m.settingsMenu = NewSettingsMenu(app)
 			m.settingsMenu, _ = m.settingsMenu.Update(tea.WindowSizeMsg{Width: m.width, Height: m.height})
 			return m, nil
 		}
-		if key.Matches(msg, dashboardKeys.StartStop) && !m.state.toggling {
-			m.state.toggling = true
-			m.state.progress = NewProgressBusy(m.width, Colors.Border)
-			return m, tea.Batch(m.state.progress.Init(), m.runStartStop())
+		if key.Matches(msg, dashboardKeys.StartStop) && len(m.apps) > 0 && !m.toggling {
+			app := m.apps[m.selectedIndex]
+			m.toggling = true
+			m.togglingApp = app.Settings.Name
+			m.progress = NewProgressBusy(m.width, Colors.Border)
+			m.updateViewportSize()
+			m.rebuildViewportContent()
+			return m, tea.Batch(m.progress.Init(), m.runStartStop(app))
 		}
-		if key.Matches(msg, dashboardKeys.Logs) {
-			return m, func() tea.Msg { return navigateToLogsMsg{app: m.state.app} }
+		if key.Matches(msg, dashboardKeys.Logs) && len(m.apps) > 0 {
+			return m, func() tea.Msg { return navigateToLogsMsg{app: m.apps[m.selectedIndex]} }
 		}
 
 	case SettingsMenuCloseMsg:
@@ -258,26 +196,40 @@ func (m Dashboard) Update(msg tea.Msg) (Component, tea.Cmd) {
 		}
 
 	case startStopFinishedMsg:
-		m.state.toggling = false
+		m.toggling = false
+		m.togglingApp = ""
+		m.updateViewportSize()
+		m.rebuildViewportContent()
 
 	case dashboardTickMsg:
+		m.rebuildViewportContent()
 		cmds = append(cmds, tea.Tick(time.Second, func(time.Time) tea.Msg { return dashboardTickMsg{} }))
 
-	case scrapeDoneMsg:
-		updated, _ := m.layout.Update(ChartRefreshMsg{})
-		m.layout = updated.(StackLayout)
-
 	case progressBusyTickMsg:
-		if m.state.toggling {
+		if m.toggling {
 			var cmd tea.Cmd
-			m.state.progress, cmd = m.state.progress.Update(msg)
+			m.progress, cmd = m.progress.Update(msg)
 			cmds = append(cmds, cmd)
 		}
 
 	case namespaceChangedMsg:
-		if app := m.namespace.Application(m.state.app.Settings.Name); app != nil {
-			m.state.app = app
+		previousName := ""
+		if m.selectedIndex < len(m.apps) {
+			previousName = m.apps[m.selectedIndex].Settings.Name
 		}
+		m.apps = m.namespace.Applications()
+		m.selectedIndex = 0
+		for i, app := range m.apps {
+			if app.Settings.Name == previousName {
+				m.selectedIndex = i
+				break
+			}
+		}
+		if m.selectedIndex >= len(m.apps) && len(m.apps) > 0 {
+			m.selectedIndex = len(m.apps) - 1
+		}
+		m.rebuildViewportContent()
+		m.scrollToSelection()
 	}
 
 	if m.showingMenu {
@@ -290,7 +242,15 @@ func (m Dashboard) Update(msg tea.Msg) (Component, tea.Cmd) {
 }
 
 func (m Dashboard) View() string {
-	content := m.layout.View()
+	helpView := m.help.View(dashboardKeys)
+	helpLine := Styles.HelpLine(m.width, helpView)
+
+	var content string
+	if m.toggling {
+		content = m.viewport.View() + "\n" + m.progress.View() + "\n" + helpLine
+	} else {
+		content = m.viewport.View() + "\n" + helpLine
+	}
 
 	if m.showingMenu {
 		contentLayer := newZoneLayer(content)
@@ -303,21 +263,85 @@ func (m Dashboard) View() string {
 
 // Private
 
-func (m Dashboard) runStartStop() tea.Cmd {
+func (m Dashboard) runStartStop(app *docker.Application) tea.Cmd {
 	return func() tea.Msg {
 		var err error
-		if m.state.app.Running {
-			err = m.state.app.Stop(context.Background())
+		if app.Running {
+			err = app.Stop(context.Background())
 		} else {
-			err = m.state.app.Start(context.Background())
+			err = app.Start(context.Background())
 		}
 		return startStopFinishedMsg{err: err}
 	}
 }
 
+func (m *Dashboard) updateViewportSize() {
+	helpHeight := 1
+	progressHeight := 0
+	if m.toggling {
+		progressHeight = 1
+	}
+	vpHeight := m.height - helpHeight - progressHeight
+	if vpHeight < 0 {
+		vpHeight = 0
+	}
+	m.viewport.SetHeight(vpHeight)
+	m.viewport.SetWidth(m.width)
+}
+
+func (m *Dashboard) rebuildViewportContent() {
+	panels := make([]string, len(m.apps))
+	for i, app := range m.apps {
+		panels[i] = m.renderPanel(app, i == m.selectedIndex)
+	}
+	joined := strings.Join(panels, strings.Repeat("\n", PanelGap+1))
+	m.viewport.SetContent(joined)
+}
+
+func (m *Dashboard) scrollToSelection() {
+	panelTop := m.selectedIndex * (PanelHeight + PanelGap)
+	panelBottom := panelTop + PanelHeight
+	if panelTop < m.viewport.YOffset() {
+		m.viewport.SetYOffset(panelTop)
+	} else if panelBottom > m.viewport.YOffset()+m.viewport.Height() {
+		m.viewport.SetYOffset(panelBottom - m.viewport.Height())
+	}
+}
+
+func (m Dashboard) renderPanel(app *docker.Application, selected bool) string {
+	borderColor := Colors.Border
+	if selected {
+		borderColor = Colors.Focused
+	}
+
+	title := app.Settings.URL()
+	if title == "" {
+		title = app.Settings.Name
+	}
+
+	isToggling := m.toggling && m.togglingApp == app.Settings.Name
+	stateLine := renderStateLine(app, isToggling)
+
+	innerWidth := m.width - 4
+	if innerWidth < 0 {
+		innerWidth = 0
+	}
+	titleLine := lipgloss.Place(innerWidth, 1, lipgloss.Center, lipgloss.Center,
+		Styles.Title.Render(title))
+
+	content := lipgloss.JoinVertical(lipgloss.Left, titleLine, "", stateLine)
+
+	return lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(borderColor).
+		Width(m.width - 2).
+		Height(PanelHeight - 2).
+		Render(content)
+}
+
 // Helpers
 
-func renderInfoBox(width int, app *docker.Application, toggling bool) string {
+func renderStateLine(app *docker.Application, toggling bool) string {
 	var status string
 	var statusColor color.Color
 	if toggling && app.Running {
@@ -341,21 +365,7 @@ func renderInfoBox(width int, app *docker.Application, toggling bool) string {
 		stateDisplay += fmt.Sprintf(" (up %s)", formatDuration(time.Since(app.RunningSince)))
 	}
 
-	cpuLimit := "unlimited"
-	if app.Settings.Resources.CPUs > 0 {
-		cpuLimit = strconv.Itoa(app.Settings.Resources.CPUs)
-	}
-	memoryLimit := "unlimited"
-	if app.Settings.Resources.MemoryMB > 0 {
-		memoryLimit = strconv.Itoa(app.Settings.Resources.MemoryMB)
-	}
-
-	extraLines := []string{
-		stateDisplay,
-		fmt.Sprintf("CPU: %s  Memory: %s", cpuLimit, memoryLimit),
-	}
-
-	return Styles.TitleBox(width, app.Settings.URL(), extraLines...)
+	return stateDisplay
 }
 
 func formatDuration(d time.Duration) string {
