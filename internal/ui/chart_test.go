@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"testing"
 
-	"charm.land/lipgloss/v2"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -21,7 +20,7 @@ func TestChartView(t *testing.T) {
 		60, 65, 50, 55, 65, 60, 55, 60, 45, 50,
 	}
 
-	chart := NewChart("Test", lipgloss.NewStyle(), UnitCount)
+	chart := NewChart("Test", UnitCount)
 	output := chart.View(data, 40, 6)
 
 	fmt.Println("\nChart output:")

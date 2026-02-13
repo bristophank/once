@@ -29,10 +29,10 @@ func NewDashboardPanel(app *docker.Application, scraper *metrics.MetricsScraper,
 		app:           app,
 		scraper:       scraper,
 		dockerScraper: dockerScraper,
-		cpuChart:      NewChart("CPU %", ChartColors.CPU, UnitPercent),
-		memoryChart:   NewChart("Memory", ChartColors.Memory, UnitBytes),
-		requestChart:  NewChart("Req/min", ChartColors.Requests, UnitCount),
-		errorChart:    NewChart("Err/min", ChartColors.Errors, UnitCount),
+		cpuChart:      NewChart("CPU", UnitPercent),
+		memoryChart:   NewChart("Memory", UnitBytes),
+		requestChart:  NewChart("Req/min", UnitCount),
+		errorChart:    NewChart("Err/min", UnitCount),
 	}
 }
 
@@ -62,12 +62,19 @@ func (p DashboardPanel) View(selected bool, toggling bool, width int) string {
 	chartHeight := 6
 	minChartWidth := 10
 	if p.app.Running && innerWidth >= minChartWidth*4+3 {
-		chartWidth := (innerWidth - 3) / 4 // 3 single-char gaps between 4 charts
+		baseWidth := (innerWidth - 3) / 4 // 3 single-char gaps between 4 charts
+		remainder := (innerWidth - 3) % 4
+		chartW := func(i int) int {
+			if i < remainder {
+				return baseWidth + 1
+			}
+			return baseWidth
+		}
 
-		cpuChart := p.cpuChart.View(p.fetchCPUData(), chartWidth, chartHeight)
-		memChart := p.memoryChart.View(p.fetchMemoryData(), chartWidth, chartHeight)
-		reqChart := p.requestChart.View(p.fetchRequestData(), chartWidth, chartHeight)
-		errChart := p.errorChart.View(p.fetchErrorData(), chartWidth, chartHeight)
+		cpuChart := p.cpuChart.View(p.fetchCPUData(), chartW(0), chartHeight)
+		memChart := p.memoryChart.View(p.fetchMemoryData(), chartW(1), chartHeight)
+		reqChart := p.requestChart.View(p.fetchRequestData(), chartW(2), chartHeight)
+		errChart := p.errorChart.View(p.fetchErrorData(), chartW(3), chartHeight)
 
 		chartsRow := lipgloss.JoinHorizontal(lipgloss.Top, cpuChart, " ", memChart, " ", reqChart, " ", errChart)
 		lines = append(lines, "")
@@ -153,16 +160,16 @@ func renderStateInfo(app *docker.Application, toggling bool) string {
 	var statusColor color.Color
 	if toggling && app.Running {
 		status = "stopping..."
-		statusColor = Colors.Warning
+		statusColor = Colors.Border
 	} else if toggling {
 		status = "starting..."
-		statusColor = Colors.Warning
+		statusColor = Colors.Border
 	} else if app.Running {
 		status = "running"
-		statusColor = Colors.Success
+		statusColor = chartGradientBottom
 	} else {
 		status = "stopped"
-		statusColor = Colors.Error
+		statusColor = chartGradientTop
 	}
 
 	stateStyle := lipgloss.NewStyle().Foreground(statusColor)

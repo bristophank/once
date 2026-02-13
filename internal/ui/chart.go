@@ -2,6 +2,8 @@ package ui
 
 import (
 	"fmt"
+	"image/color"
+	"math"
 	"strings"
 	"time"
 
@@ -60,33 +62,37 @@ var (
 	rightDots = [4]rune{0x80, 0x20, 0x10, 0x08} // dots 8, 6, 5, 4
 )
 
-// Chart renders a braille histogram. The constructor takes static properties
-// (title, color, unit) and View takes per-render values (data, width, height).
+// Chart renders a braille histogram with a vertical color gradient.
+// The constructor takes static properties (title, unit) and View takes
+// per-render values (data, width, height).
 type Chart struct {
 	title string
-	color lipgloss.Style
 	unit  UnitType
 }
 
-func NewChart(title string, color lipgloss.Style, unit UnitType) Chart {
-	return Chart{title: title, color: color, unit: unit}
+func NewChart(title string, unit UnitType) Chart {
+	return Chart{title: title, unit: unit}
 }
 
-// View renders the chart as a string.
-// Layout at the given height: row 1 is the title, remaining rows are the
-// braille chart with max-value label on the first chart row and "0" on the last.
+// View renders the chart as a string with a rounded border.
+// The title is embedded in the top border line. Inner rows contain
+// the braille chart with max-value and "0" labels on the first and last rows.
 func (c Chart) View(data []float64, width, height int) string {
-	if width <= 0 || height <= 0 {
+	if width <= 0 || height <= 2 {
 		return ""
 	}
 
-	chartRows := height - 1 // minus title row
+	borderStyle := lipgloss.NewStyle().Foreground(Colors.Border)
+
+	chartRows := height - 2 // minus top and bottom border
 	if chartRows < 1 {
 		chartRows = 1
 	}
 
-	// Ensure data fills the chart width (each chart char = 2 data points)
-	dataPoints := width * 2
+	innerWidth := width - 2 // minus left and right border chars
+
+	// Ensure data fills the inner width (each chart char = 2 data points)
+	dataPoints := innerWidth * 2
 	padded := make([]float64, dataPoints)
 	srcStart := max(0, len(data)-dataPoints)
 	dstStart := max(0, dataPoints-len(data))
@@ -101,7 +107,7 @@ func (c Chart) View(data []float64, width, height int) string {
 	// Format labels and calculate label width
 	maxLabel := c.unit.Format(displayMax)
 	labelWidth := max(len(maxLabel), 1)
-	chartWidth := width - labelWidth - 1 // -1 for space between label and chart
+	chartWidth := innerWidth - labelWidth - 1 // -1 for space between label and chart
 
 	if chartWidth <= 0 {
 		return ""
@@ -121,13 +127,22 @@ func (c Chart) View(data []float64, width, height int) string {
 
 	var lines []string
 
-	// Title line (left-aligned in chart color)
-	lines = append(lines, c.color.Render(c.title))
+	// Top border with embedded title: ╭─Title─────╮
+	titleLen := lipgloss.Width(c.title)
+	topFill := innerWidth - 1 - titleLen // 1 for dash before title
+	if topFill < 0 {
+		topFill = 0
+	}
+	topLine := "╭─" + c.title + strings.Repeat("─", topFill) + "╮"
+	lines = append(lines, borderStyle.Render(topLine))
 
 	// Build the chart row by row, from top to bottom
 	dataOffset := max(0, len(heights)-chartWidth*2)
 
-	labelStyle := lipgloss.NewStyle().Width(labelWidth).Align(lipgloss.Left)
+	labelStyle := lipgloss.NewStyle().Foreground(Colors.Border).Width(labelWidth).Align(lipgloss.Left)
+	left := borderStyle.Render("│")
+	right := borderStyle.Render("│")
+
 	for row := range chartRows {
 		var sb strings.Builder
 		rowBottomDot := (chartRows - 1 - row) * 4
@@ -160,9 +175,16 @@ func (c Chart) View(data []float64, width, height int) string {
 			label = labelStyle.Render("")
 		}
 
-		chartRow := c.color.Render(sb.String())
-		lines = append(lines, label+" "+chartRow)
+		// Gradient from teal (bottom) to orange (top)
+		t := float64(chartRows-1-row) / float64(max(chartRows-1, 1))
+		rowColor := lerpColor(chartGradientBottom, chartGradientTop, t)
+		chartRow := lipgloss.NewStyle().Foreground(rowColor).Render(sb.String())
+		lines = append(lines, left+label+" "+chartRow+right)
 	}
+
+	// Bottom border: ╰─────╯
+	bottomLine := "╰" + strings.Repeat("─", innerWidth) + "╯"
+	lines = append(lines, borderStyle.Render(bottomLine))
 
 	return strings.Join(lines, "\n")
 }
@@ -202,6 +224,20 @@ func SlidingSum(data []float64, window int) []float64 {
 }
 
 // Helpers
+
+var (
+	chartGradientBottom = lipgloss.Color("#2db89a") // teal
+	chartGradientTop    = lipgloss.Color("#f0a050") // orange
+)
+
+func lerpColor(a, b color.Color, t float64) color.Color {
+	ar, ag, ab, _ := a.RGBA()
+	br, bg, bb, _ := b.RGBA()
+	lerp := func(x, y uint32) uint8 {
+		return uint8(math.Round((float64(x) + t*(float64(y)-float64(x))) / 256))
+	}
+	return color.RGBA{R: lerp(ar, br), G: lerp(ag, bg), B: lerp(ab, bb), A: 255}
+}
 
 func maxValue(data []float64) float64 {
 	if len(data) == 0 {

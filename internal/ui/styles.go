@@ -43,18 +43,6 @@ var Colors = colors{
 	},
 }
 
-var ChartColors = struct {
-	CPU      lipgloss.Style
-	Memory   lipgloss.Style
-	Requests lipgloss.Style
-	Errors   lipgloss.Style
-}{
-	CPU:      lipgloss.NewStyle().Foreground(Colors.Info),
-	Memory:   lipgloss.NewStyle().Foreground(Colors.Muted),
-	Requests: lipgloss.NewStyle().Foreground(Colors.Success),
-	Errors:   lipgloss.NewStyle().Foreground(Colors.Error),
-}
-
 type styles struct {
 	Title         lipgloss.Style
 	Label         lipgloss.Style
