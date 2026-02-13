@@ -85,7 +85,7 @@ func (n *Namespace) UniqueName(base string) string {
 		return base
 	}
 	for i := 1; ; i++ {
-		candidate := fmt.Sprintf("%s-%d", base, i)
+		candidate := fmt.Sprintf("%s.%d", base, i)
 		if n.Application(candidate) == nil {
 			return candidate
 		}
@@ -148,8 +148,6 @@ func (n *Namespace) EventWatcher() *EventWatcher {
 }
 
 func (n *Namespace) ApplicationExists(ctx context.Context, name string) (bool, error) {
-	prefix := fmt.Sprintf("%s-app-%s-", n.name, name)
-
 	containers, err := n.client.ContainerList(ctx, container.ListOptions{All: true})
 	if err != nil {
 		return false, err
@@ -158,7 +156,7 @@ func (n *Namespace) ApplicationExists(ctx context.Context, name string) (bool, e
 	for _, c := range containers {
 		for _, cname := range c.Names {
 			cname = strings.TrimPrefix(cname, "/")
-			if strings.HasPrefix(cname, prefix) {
+			if n.containerAppName(cname) == name {
 				return true, nil
 			}
 		}
@@ -195,6 +193,21 @@ func (n *Namespace) Restore(ctx context.Context, r io.Reader) (*Application, err
 	}
 
 	return app, nil
+}
+
+// containerAppName extracts the application name from a container name
+// matching the pattern {namespace}-app-{appName}-{id}. Returns "" if the
+// container name doesn't match.
+func (n *Namespace) containerAppName(containerName string) string {
+	after, ok := strings.CutPrefix(containerName, n.name+"-app-")
+	if !ok {
+		return ""
+	}
+	appName, _, ok := cutLast(after, "-")
+	if !ok {
+		return ""
+	}
+	return appName
 }
 
 // Private
@@ -349,4 +362,16 @@ func (n *Namespace) parseBackup(r io.Reader) (ApplicationSettings, ApplicationVo
 	}
 
 	return appSettings, volSettings, volumeData.Bytes(), nil
+}
+
+// Helpers
+
+// cutLast splits s around the last occurrence of sep, like strings.Cut but
+// from the right.
+func cutLast(s, sep string) (before, after string, found bool) {
+	i := strings.LastIndex(s, sep)
+	if i < 0 {
+		return s, "", false
+	}
+	return s[:i], s[i+len(sep):], true
 }

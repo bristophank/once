@@ -175,8 +175,6 @@ func NewApplication(ns *Namespace, settings ApplicationSettings) *Application {
 }
 
 func (a *Application) ContainerName(ctx context.Context) (string, error) {
-	prefix := fmt.Sprintf("%s-app-%s-", a.namespace.name, a.Settings.Name)
-
 	containers, err := a.namespace.client.ContainerList(ctx, container.ListOptions{All: true})
 	if err != nil {
 		return "", err
@@ -187,7 +185,7 @@ func (a *Application) ContainerName(ctx context.Context) (string, error) {
 			continue
 		}
 		name := strings.TrimPrefix(c.Names[0], "/")
-		if strings.HasPrefix(name, prefix) {
+		if a.namespace.containerAppName(name) == a.Settings.Name {
 			return name, nil
 		}
 	}
@@ -405,8 +403,6 @@ func (a *Application) Remove(ctx context.Context, removeData bool) error {
 }
 
 func (a *Application) Destroy(ctx context.Context, destroyVolumes bool) error {
-	prefix := fmt.Sprintf("%s-app-%s-", a.namespace.name, a.Settings.Name)
-
 	containers, err := a.namespace.client.ContainerList(ctx, container.ListOptions{All: true})
 	if err != nil {
 		return err
@@ -415,7 +411,7 @@ func (a *Application) Destroy(ctx context.Context, destroyVolumes bool) error {
 	for _, c := range containers {
 		for _, name := range c.Names {
 			name = strings.TrimPrefix(name, "/")
-			if strings.HasPrefix(name, prefix) {
+			if a.namespace.containerAppName(name) == a.Settings.Name {
 				if err := a.namespace.client.ContainerRemove(ctx, c.ID, container.RemoveOptions{Force: true}); err != nil {
 					return fmt.Errorf("removing container: %w", err)
 				}
@@ -690,8 +686,6 @@ func (a *Application) containerConfig(env []string) *container.Config {
 }
 
 func (a *Application) removeContainersExcept(ctx context.Context, keep string) error {
-	prefix := fmt.Sprintf("%s-app-%s-", a.namespace.name, a.Settings.Name)
-
 	containers, err := a.namespace.client.ContainerList(ctx, container.ListOptions{All: true})
 	if err != nil {
 		return err
@@ -702,7 +696,7 @@ func (a *Application) removeContainersExcept(ctx context.Context, keep string) e
 			continue
 		}
 		name := strings.TrimPrefix(c.Names[0], "/")
-		if strings.HasPrefix(name, prefix) && name != keep {
+		if a.namespace.containerAppName(name) == a.Settings.Name && name != keep {
 			if err := a.namespace.client.ContainerRemove(ctx, c.ID, container.RemoveOptions{Force: true}); err != nil {
 				return err
 			}

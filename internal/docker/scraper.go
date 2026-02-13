@@ -155,10 +155,7 @@ func (s *Scraper) findAppContainers(ctx context.Context) (map[string]string, err
 		for _, name := range c.Names {
 			name = strings.TrimPrefix(name, "/")
 			if after, ok := strings.CutPrefix(name, s.prefix); ok {
-				remainder := after
-				lastDash := strings.LastIndex(remainder, "-")
-				if lastDash > 0 {
-					appName := remainder[:lastDash]
+				if appName, _, ok := cutLast(after, "-"); ok {
 					result[appName] = c.ID
 				}
 			}
