@@ -1,4 +1,4 @@
-.PHONY: build test integration lint coverage
+.PHONY: build test integration lint coverage dist test-release
 
 PLATFORMS = linux darwin
 ARCHITECTURES = amd64 arm64
@@ -26,3 +26,19 @@ lint:
 coverage:
 	go test -coverprofile=coverage.out ./internal/...
 	go tool cover -html=coverage.out
+
+dist: build-all
+	mkdir -p dist
+	@for os in $(PLATFORMS); do \
+		for arch in $(ARCHITECTURES); do \
+			cp bin/$$os-$$arch/once dist/once-$$os-$$arch; \
+		done; \
+	done
+	cd dist && sha256sum once-* > checksums.txt
+
+TEST_RELEASE_TAG = v0.0.1-test
+
+test-release:
+	-gh release delete $(TEST_RELEASE_TAG) --yes --cleanup-tag
+	git tag -f $(TEST_RELEASE_TAG)
+	git push origin $(TEST_RELEASE_TAG) --force

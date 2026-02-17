@@ -1,0 +1,91 @@
+package main
+
+import (
+	"log/slog"
+	"net/http"
+	"os"
+	"strings"
+	"text/template"
+	"time"
+)
+
+type InstalScriptArgs struct {
+	ImageRef string
+}
+
+func withLogging(h http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+		rl := &responseLogger{ResponseWriter: w, status: http.StatusOK}
+
+		h.ServeHTTP(rl, r)
+
+		duration := time.Since(start)
+		clientIP := r.Header.Get("X-Forwarded-For")
+		if clientIP == "" {
+			clientIP = strings.Split(r.RemoteAddr, ":")[0]
+		} else {
+			clientIP = strings.Split(clientIP, ",")[0]
+			clientIP = strings.TrimSpace(clientIP)
+		}
+
+		slog.Info("request",
+			"ip", clientIP,
+			"method", r.Method,
+			"path", r.URL.Path,
+			"status", rl.status,
+			"size", rl.size,
+			"duration", duration,
+		)
+	}
+}
+
+type responseLogger struct {
+	http.ResponseWriter
+	status int
+	size   int
+}
+
+func (rl *responseLogger) WriteHeader(status int) {
+	rl.status = status
+	rl.ResponseWriter.WriteHeader(status)
+}
+
+func (rl *responseLogger) Write(b []byte) (int, error) {
+	n, err := rl.ResponseWriter.Write(b)
+	rl.size += n
+	return n, err
+}
+
+func newInstallScriptHandler(template *template.Template) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		args := InstalScriptArgs{
+			ImageRef: r.PathValue("image"),
+		}
+
+		err := template.ExecuteTemplate(w, "install.sh", args)
+		if err != nil {
+			slog.Error("Failed to execute template", "error", err)
+		}
+	}
+}
+
+func main() {
+	template, err := template.ParseGlob("templates/*")
+	if err != nil {
+		panic(err)
+	}
+
+	http.HandleFunc("GET /up", withLogging(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("OK"))
+	}))
+	http.HandleFunc("GET /{image...}", withLogging(newInstallScriptHandler(template)))
+
+	port := os.Getenv("HTTP_PORT")
+	if port == "" {
+		port = "80"
+	}
+
+	panic(http.ListenAndServe(":"+port, nil))
+}
