@@ -78,12 +78,12 @@ func (m Install) Update(msg tea.Msg) (Component, tea.Cmd) {
 				m.err = nil
 			}
 			if key.Matches(msg, installKeys.Back) {
-				return m, func() tea.Msg { return navigateToDashboardMsg{} }
+				return m.cancelFromScreen()
 			}
 		}
 
 	case InstallFormCancelMsg:
-		return m, func() tea.Msg { return navigateToDashboardMsg{} }
+		return m.cancelFromScreen()
 
 	case InstallFormSubmitMsg:
 		m.state = installStateActivity
@@ -107,6 +107,13 @@ func (m Install) Update(msg tea.Msg) (Component, tea.Cmd) {
 		m.activity, cmd = m.activity.Update(msg)
 	}
 	return m, cmd
+}
+
+func (m Install) cancelFromScreen() (Component, tea.Cmd) {
+	if m.form.ImageRef() != "" {
+		return m, func() tea.Msg { return quitMsg{} }
+	}
+	return m, func() tea.Msg { return navigateToDashboardMsg{} }
 }
 
 func (m Install) View() string {

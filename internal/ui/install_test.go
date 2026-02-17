@@ -87,6 +87,28 @@ func TestInstall_CancelNavigatesToDashboard(t *testing.T) {
 	assert.True(t, ok, "expected navigateToDashboardMsg, got %T", msg)
 }
 
+func TestInstall_EscQuitsWhenImageRefSet(t *testing.T) {
+	m := NewInstall(nil, "nginx:latest")
+
+	_, cmd := updateInstall(m, tea.KeyPressMsg{Code: tea.KeyEscape})
+	require.NotNil(t, cmd)
+
+	msg := cmd()
+	_, ok := msg.(quitMsg)
+	assert.True(t, ok, "expected quitMsg, got %T", msg)
+}
+
+func TestInstall_CancelQuitsWhenImageRefSet(t *testing.T) {
+	m := NewInstall(nil, "nginx:latest")
+
+	_, cmd := updateInstall(m, InstallFormCancelMsg{})
+	require.NotNil(t, cmd)
+
+	msg := cmd()
+	_, ok := msg.(quitMsg)
+	assert.True(t, ok, "expected quitMsg, got %T", msg)
+}
+
 // Helpers
 
 func newTestInstall() Install {
