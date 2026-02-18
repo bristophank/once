@@ -298,10 +298,7 @@ func (m *Dashboard) updateViewportSize() {
 	if m.toggling {
 		progressHeight = 1
 	}
-	vpHeight := m.height - titleHeight - helpHeight - progressHeight
-	if vpHeight < 0 {
-		vpHeight = 0
-	}
+	vpHeight := max(m.height-titleHeight-helpHeight-progressHeight, 0)
 	m.viewport.SetHeight(vpHeight)
 	m.viewport.SetWidth(m.width)
 }

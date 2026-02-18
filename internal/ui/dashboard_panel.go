@@ -41,17 +41,11 @@ func (p DashboardPanel) View(selected bool, toggling bool, width int) string {
 		title = p.app.Settings.Name
 	}
 
-	innerWidth := width - 3 // 1 indicator + 1 left pad + 1 right pad
-	if innerWidth < 0 {
-		innerWidth = 0
-	}
+	innerWidth := max(width-3, 0) // 1 indicator + 1 left pad + 1 right pad
 
 	left := Styles.Title.Render(title)
 	right := renderStateInfo(p.app, toggling)
-	gap := innerWidth - 1 - lipgloss.Width(left) - lipgloss.Width(right)
-	if gap < 1 {
-		gap = 1
-	}
+	gap := max(innerWidth-1-lipgloss.Width(left)-lipgloss.Width(right), 1)
 	titleLine := " " + left + strings.Repeat(" ", gap) + right
 
 	var lines []string
@@ -87,7 +81,7 @@ func (p DashboardPanel) View(selected bool, toggling bool, width int) string {
 	}
 
 	bodyStyle := lipgloss.NewStyle().
-		Width(width - 1).
+		Width(width-1).
 		Padding(0, 1).
 		Height(height)
 
@@ -213,7 +207,6 @@ func renderStateInfo(app *docker.Application, toggling bool) string {
 
 	return stateDisplay
 }
-
 
 func formatDuration(d time.Duration) string {
 	if d < time.Minute {

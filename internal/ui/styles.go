@@ -10,34 +10,34 @@ import (
 )
 
 type colors struct {
-	Primary         color.Color
-	Secondary       color.Color
-	Background      color.Color
-	Text            color.Color
-	TextDark        color.Color
-	Focused         color.Color
-	Border          color.Color
-	Success         color.Color
-	Warning         color.Color
-	Error           color.Color
-	Info            color.Color
-	Muted           color.Color
-	PanelBg color.Color
+	Primary    color.Color
+	Secondary  color.Color
+	Background color.Color
+	Text       color.Color
+	TextDark   color.Color
+	Focused    color.Color
+	Border     color.Color
+	Success    color.Color
+	Warning    color.Color
+	Error      color.Color
+	Info       color.Color
+	Muted      color.Color
+	PanelBg    color.Color
 }
 
 var Colors = colors{
-	Primary:         lipgloss.Color("#7AA2F7"),
-	Secondary:       lipgloss.Color("#9f3"),
-	Background:      lipgloss.Color("#000000"),
-	Text:            lipgloss.Color("#FFFFFF"),
-	TextDark:        lipgloss.Color("#000000"),
-	Focused:         lipgloss.Color("#FFA500"),
-	Border:          lipgloss.Color("#6272a4"),
-	Success:         lipgloss.Color("#50fa7b"),
-	Warning:         lipgloss.Color("#f1fa8c"),
-	Error:           lipgloss.Color("#ff5555"),
-	Info:            lipgloss.Color("#8be9fd"),
-	Muted:           lipgloss.Color("#bd93f9"),
+	Primary:    lipgloss.Color("#7AA2F7"),
+	Secondary:  lipgloss.Color("#9f3"),
+	Background: lipgloss.Color("#000000"),
+	Text:       lipgloss.Color("#FFFFFF"),
+	TextDark:   lipgloss.Color("#000000"),
+	Focused:    lipgloss.Color("#FFA500"),
+	Border:     lipgloss.Color("#6272a4"),
+	Success:    lipgloss.Color("#50fa7b"),
+	Warning:    lipgloss.Color("#f1fa8c"),
+	Error:      lipgloss.Color("#ff5555"),
+	Info:       lipgloss.Color("#8be9fd"),
+	Muted:      lipgloss.Color("#bd93f9"),
 	PanelBg: compat.AdaptiveColor{
 		Light: lipgloss.Color("#e8e8e8"),
 		Dark:  lipgloss.Color("#1a1b26"),
@@ -84,10 +84,7 @@ func (s styles) Focus(base lipgloss.Style, focused bool) lipgloss.Style {
 
 func (s styles) TitleRule(width int, crumbs ...string) string {
 	label := " " + strings.Join(append([]string{"ONCE"}, crumbs...), " · ") + " "
-	ruleWidth := width - 2 // end caps
-	if ruleWidth < len(label) {
-		ruleWidth = len(label)
-	}
+	ruleWidth := max(width-2, len(label)) // subtract end caps
 	side := (ruleWidth - len(label)) / 2
 	remainder := ruleWidth - len(label) - side*2
 	line := "╶" + strings.Repeat("─", side) + label + strings.Repeat("─", side+remainder) + "╴"
@@ -161,4 +158,3 @@ func hasVisibleContent(s string) bool {
 	}
 	return false
 }
-

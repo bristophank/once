@@ -10,9 +10,11 @@ import (
 	"charm.land/lipgloss/v2"
 )
 
-const ChartHistoryLength = 200
-const ChartUpdateInterval = 2 * time.Second
-const ChartSlidingWindow = int(time.Minute / ChartUpdateInterval)
+const (
+	ChartHistoryLength  = 200
+	ChartUpdateInterval = 2 * time.Second
+	ChartSlidingWindow  = int(time.Minute / ChartUpdateInterval)
+)
 
 type UnitType int
 
@@ -84,12 +86,8 @@ func (c Chart) View(data []float64, width, height int) string {
 
 	borderStyle := lipgloss.NewStyle().Foreground(Colors.Border)
 
-	chartRows := height - 2 // minus top and bottom border
-	if chartRows < 1 {
-		chartRows = 1
-	}
-
-	innerWidth := width - 2 // minus left and right border chars
+	chartRows := max(height-2, 1) // minus top and bottom border
+	innerWidth := width - 2       // minus left and right border chars
 
 	// Ensure data fills the inner width (each chart char = 2 data points)
 	dataPoints := innerWidth * 2
@@ -129,10 +127,7 @@ func (c Chart) View(data []float64, width, height int) string {
 
 	// Top border with embedded title: ╭─Title─────╮
 	titleLen := lipgloss.Width(c.title)
-	topFill := innerWidth - 1 - titleLen // 1 for dash before title
-	if topFill < 0 {
-		topFill = 0
-	}
+	topFill := max(innerWidth-1-titleLen, 0) // 1 for dash before title
 	topLine := "╭─" + c.title + strings.Repeat("─", topFill) + "╮"
 	lines = append(lines, borderStyle.Render(topLine))
 
