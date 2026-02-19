@@ -22,7 +22,9 @@ func NewBackgroundRunCommand(root *RootCommand) *BackgroundRunCommand {
 		Short:  "Run background tasks (automatic backups and updates)",
 		Args:   cobra.NoArgs,
 		Hidden: true,
-		PreRunE: func(cmd *cobra.Command, args []string) error {
+
+		// Note: override parent PersistentPreRunE here, so we skip the default logging setup.
+		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 			logging.SetupStderr()
 			return nil
 		},
