@@ -12,6 +12,7 @@ type KeyType int
 
 const (
 	KeyRune KeyType = iota // Regular character (check Key.Rune)
+	KeyBackspace
 	KeyCtrlA
 	KeyCtrlB
 	KeyCtrlC
@@ -20,11 +21,9 @@ const (
 	KeyCtrlF
 	KeyCtrlG
 	KeyCtrlH // Backspace on some terminals
-	KeyTab   // Ctrl+I
 	KeyCtrlJ // Enter on some terminals
 	KeyCtrlK
 	KeyCtrlL
-	KeyEnter // Ctrl+M
 	KeyCtrlN
 	KeyCtrlO
 	KeyCtrlP
@@ -38,19 +37,15 @@ const (
 	KeyCtrlX
 	KeyCtrlY
 	KeyCtrlZ
-	KeyEscape
-	KeyBackspace
-	KeyUp
-	KeyDown
-	KeyRight
-	KeyLeft
-	KeyHome
-	KeyEnd
-	KeyPageUp
-	KeyPageDown
-	KeyInsert
 	KeyDelete
+	KeyDown
+	KeyEnd
+	KeyEnter // Ctrl+M
+	KeyEscape
 	KeyF1
+	KeyF10
+	KeyF11
+	KeyF12
 	KeyF2
 	KeyF3
 	KeyF4
@@ -59,10 +54,15 @@ const (
 	KeyF7
 	KeyF8
 	KeyF9
-	KeyF10
-	KeyF11
-	KeyF12
+	KeyHome
+	KeyInsert
+	KeyLeft
+	KeyPageDown
+	KeyPageUp
+	KeyRight
 	KeyShiftTab
+	KeyTab // Ctrl+I
+	KeyUp
 	KeyUnknown
 )
 
