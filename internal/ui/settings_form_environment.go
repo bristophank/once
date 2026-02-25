@@ -1,9 +1,8 @@
 package ui
 
 import (
+	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
-
-	"github.com/basecamp/gliff/tui"
 
 	"github.com/basecamp/once/internal/docker"
 )
@@ -19,11 +18,11 @@ func NewSettingsFormEnvironment(settings docker.ApplicationSettings) *SettingsFo
 		form:     NewForm("Done"),
 	}
 
-	m.form.OnSubmit(func() tui.Cmd {
-		return func() tui.Msg { return SettingsSectionCancelMsg{} }
+	m.form.OnSubmit(func() tea.Cmd {
+		return func() tea.Msg { return SettingsSectionCancelMsg{} }
 	})
-	m.form.OnCancel(func() tui.Cmd {
-		return func() tui.Msg { return SettingsSectionCancelMsg{} }
+	m.form.OnCancel(func() tea.Cmd {
+		return func() tea.Msg { return SettingsSectionCancelMsg{} }
 	})
 
 	return m
@@ -33,17 +32,17 @@ func (m *SettingsFormEnvironment) Title() string {
 	return "Environment"
 }
 
-func (m *SettingsFormEnvironment) Init() tui.Cmd {
+func (m *SettingsFormEnvironment) Init() tea.Cmd {
 	return m.form.Init()
 }
 
-func (m *SettingsFormEnvironment) Update(msg tui.Msg) tui.Cmd {
+func (m *SettingsFormEnvironment) Update(msg tea.Msg) tea.Cmd {
 	return m.form.Update(msg)
 }
 
 func (m *SettingsFormEnvironment) StatusLine() string { return "" }
 
-func (m *SettingsFormEnvironment) Render() string {
+func (m *SettingsFormEnvironment) View() string {
 	placeholder := lipgloss.NewStyle().
 		Foreground(Colors.Border).
 		Italic(true).
@@ -52,6 +51,6 @@ func (m *SettingsFormEnvironment) Render() string {
 	return lipgloss.JoinVertical(lipgloss.Left,
 		placeholder,
 		"",
-		m.form.Render(),
+		m.form.View(),
 	)
 }

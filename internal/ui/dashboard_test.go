@@ -5,7 +5,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/basecamp/gliff/tui"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/basecamp/once/internal/docker"
@@ -52,24 +51,24 @@ func TestDashboardKeyboardSelectsPanel(t *testing.T) {
 
 	assert.Equal(t, 0, d.selectedIndex)
 
-	d.Update(keyMsg(tui.KeyDown, 0))
+	d.Update(keyPressMsg("down"))
 	assert.Equal(t, 1, d.selectedIndex)
 
-	d.Update(keyMsg(tui.KeyDown, 0))
+	d.Update(keyPressMsg("down"))
 	assert.Equal(t, 2, d.selectedIndex)
 
 	// Can't go past last
-	d.Update(keyMsg(tui.KeyDown, 0))
+	d.Update(keyPressMsg("down"))
 	assert.Equal(t, 2, d.selectedIndex)
 
-	d.Update(keyMsg(tui.KeyUp, 0))
+	d.Update(keyPressMsg("up"))
 	assert.Equal(t, 1, d.selectedIndex)
 
-	d.Update(keyMsg(tui.KeyUp, 0))
+	d.Update(keyPressMsg("up"))
 	assert.Equal(t, 0, d.selectedIndex)
 
 	// Can't go before first
-	d.Update(keyMsg(tui.KeyUp, 0))
+	d.Update(keyPressMsg("up"))
 	assert.Equal(t, 0, d.selectedIndex)
 }
 
@@ -80,10 +79,10 @@ func TestDashboardKeyboardJK(t *testing.T) {
 	d.updateViewportSize()
 	d.rebuildViewportContent()
 
-	d.Update(runeMsg('j'))
+	d.Update(runeKeyMsg('j'))
 	assert.Equal(t, 1, d.selectedIndex)
 
-	d.Update(runeMsg('k'))
+	d.Update(runeKeyMsg('k'))
 	assert.Equal(t, 0, d.selectedIndex)
 }
 

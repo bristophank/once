@@ -1,14 +1,14 @@
 package ui
 
 import (
+	"charm.land/bubbles/v2/key"
+	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
-
-	"github.com/basecamp/gliff/tui"
 
 	"github.com/basecamp/once/internal/docker"
 )
 
-var settingsMenuCloseKey = NewKeyBinding(Key(tui.KeyEscape)).WithHelp("esc", "close")
+var settingsMenuCloseKey = WithHelp(NewKeyBinding("esc"), "esc", "close")
 
 type SettingsMenuCloseMsg struct{}
 
@@ -27,31 +27,31 @@ func NewSettingsMenu(app *docker.Application) SettingsMenu {
 	return SettingsMenu{
 		app: app,
 		menu: NewMenu(
-			MenuItem{Label: "Application", Key: int(SettingsSectionApplication), Shortcut: NewKeyBinding(RuneKey('a')).WithHelp("a", "")},
-			MenuItem{Label: "Email", Key: int(SettingsSectionEmail), Shortcut: NewKeyBinding(RuneKey('e')).WithHelp("e", "")},
-			MenuItem{Label: "Environment", Key: int(SettingsSectionEnvironment), Shortcut: NewKeyBinding(RuneKey('v')).WithHelp("v", "")},
-			MenuItem{Label: "Resources", Key: int(SettingsSectionResources), Shortcut: NewKeyBinding(RuneKey('r')).WithHelp("r", "")},
-			MenuItem{Label: "Updates", Key: int(SettingsSectionUpdates), Shortcut: NewKeyBinding(RuneKey('u')).WithHelp("u", "")},
-			MenuItem{Label: "Backups", Key: int(SettingsSectionBackups), Shortcut: NewKeyBinding(RuneKey('b')).WithHelp("b", "")},
+			MenuItem{Label: "Application", Key: int(SettingsSectionApplication), Shortcut: WithHelp(NewKeyBinding("a"), "a", "")},
+			MenuItem{Label: "Email", Key: int(SettingsSectionEmail), Shortcut: WithHelp(NewKeyBinding("e"), "e", "")},
+			MenuItem{Label: "Environment", Key: int(SettingsSectionEnvironment), Shortcut: WithHelp(NewKeyBinding("v"), "v", "")},
+			MenuItem{Label: "Resources", Key: int(SettingsSectionResources), Shortcut: WithHelp(NewKeyBinding("r"), "r", "")},
+			MenuItem{Label: "Updates", Key: int(SettingsSectionUpdates), Shortcut: WithHelp(NewKeyBinding("u"), "u", "")},
+			MenuItem{Label: "Backups", Key: int(SettingsSectionBackups), Shortcut: WithHelp(NewKeyBinding("b"), "b", "")},
 		),
 		help: NewHelp(),
 	}
 }
 
-func (m *SettingsMenu) Init() tui.Cmd {
+func (m *SettingsMenu) Init() tea.Cmd {
 	return nil
 }
 
-func (m *SettingsMenu) Update(msg tui.Msg) tui.Cmd {
+func (m *SettingsMenu) Update(msg tea.Msg) tea.Cmd {
 	switch msg := msg.(type) {
-	case tui.MouseMsg:
+	case MouseEvent:
 		if cmd := m.help.Update(msg); cmd != nil {
 			return cmd
 		}
 
-	case tui.KeyMsg:
-		if settingsMenuCloseKey.Matches(msg) {
-			return func() tui.Msg { return SettingsMenuCloseMsg{} }
+	case tea.KeyPressMsg:
+		if key.Matches(msg, settingsMenuCloseKey) {
+			return func() tea.Msg { return SettingsMenuCloseMsg{} }
 		}
 
 	case MenuSelectMsg:
@@ -61,7 +61,7 @@ func (m *SettingsMenu) Update(msg tui.Msg) tui.Cmd {
 	return m.menu.Update(msg)
 }
 
-func (m *SettingsMenu) Render() string {
+func (m *SettingsMenu) View() string {
 	boxStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(Colors.Border).
@@ -74,9 +74,9 @@ func (m *SettingsMenu) Render() string {
 
 	title := titleStyle.Render("Settings")
 
-	menuView := m.menu.Render()
+	menuView := m.menu.View()
 
-	helpView := m.help.Render([]KeyBinding{settingsMenuCloseKey})
+	helpView := m.help.View([]key.Binding{settingsMenuCloseKey})
 	menuWidth := lipgloss.Width(menuView)
 	helpLine := lipgloss.NewStyle().MarginTop(1).Width(menuWidth).Align(lipgloss.Center).Render(helpView)
 
@@ -91,8 +91,8 @@ func (m *SettingsMenu) Render() string {
 
 // Private
 
-func (m *SettingsMenu) selectSection(section SettingsSectionType) tui.Cmd {
-	return func() tui.Msg {
+func (m *SettingsMenu) selectSection(section SettingsSectionType) tea.Cmd {
+	return func() tea.Msg {
 		return SettingsMenuSelectMsg{app: m.app, section: section}
 	}
 }

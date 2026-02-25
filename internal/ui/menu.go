@@ -4,25 +4,27 @@ import (
 	"strconv"
 	"strings"
 
+	"charm.land/bubbles/v2/key"
+	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
-	"github.com/basecamp/gliff/tui"
+	"github.com/basecamp/once/internal/mouse"
 )
 
 var menuKeys = struct {
-	Up     KeyBinding
-	Down   KeyBinding
-	Select KeyBinding
+	Up     key.Binding
+	Down   key.Binding
+	Select key.Binding
 }{
-	Up:     NewKeyBinding(Key(tui.KeyUp), RuneKey('k')),
-	Down:   NewKeyBinding(Key(tui.KeyDown), RuneKey('j')),
-	Select: NewKeyBinding(Key(tui.KeyEnter)),
+	Up:     NewKeyBinding("up", "k"),
+	Down:   NewKeyBinding("down", "j"),
+	Select: NewKeyBinding("enter"),
 }
 
 type MenuItem struct {
 	Label    string
 	Key      int
-	Shortcut KeyBinding
+	Shortcut key.Binding
 }
 
 type MenuSelectMsg struct{ Key int }
@@ -41,15 +43,15 @@ func NewMenu(items ...MenuItem) Menu {
 	return m
 }
 
-func (m *Menu) Update(msg tui.Msg) tui.Cmd {
+func (m *Menu) Update(msg tea.Msg) tea.Cmd {
 	count := len(m.items)
 	if count == 0 {
 		return nil
 	}
 
 	switch msg := msg.(type) {
-	case tui.MouseMsg:
-		if msg.Type == tui.MousePress && msg.Button == tui.MouseLeft {
+	case MouseEvent:
+		if msg.IsClick {
 			for i, item := range m.items {
 				if msg.Target == menuItemTarget(i) {
 					m.selected = i
@@ -58,17 +60,17 @@ func (m *Menu) Update(msg tui.Msg) tui.Cmd {
 			}
 		}
 
-	case tui.KeyMsg:
+	case tea.KeyPressMsg:
 		switch {
-		case menuKeys.Up.Matches(msg):
+		case key.Matches(msg, menuKeys.Up):
 			m.selected = (m.selected - 1 + count) % count
-		case menuKeys.Down.Matches(msg):
+		case key.Matches(msg, menuKeys.Down):
 			m.selected = (m.selected + 1) % count
-		case menuKeys.Select.Matches(msg):
+		case key.Matches(msg, menuKeys.Select):
 			return m.selectItem(m.items[m.selected].Key)
 		default:
 			for i, item := range m.items {
-				if item.Shortcut.Matches(msg) {
+				if key.Matches(msg, item.Shortcut) {
 					m.selected = i
 					return m.selectItem(item.Key)
 				}
@@ -79,7 +81,7 @@ func (m *Menu) Update(msg tui.Msg) tui.Cmd {
 	return nil
 }
 
-func (m *Menu) Render() string {
+func (m *Menu) View() string {
 	itemStyle := lipgloss.NewStyle()
 	selectedStyle := lipgloss.NewStyle().Reverse(true)
 	keyStyle := lipgloss.NewStyle().Foreground(Colors.Border)
@@ -87,7 +89,7 @@ func (m *Menu) Render() string {
 	lines := make([]string, len(m.items))
 	for i, item := range m.items {
 		padding := strings.Repeat(" ", m.padWidth-len(item.Label))
-		shortcutStr := item.Shortcut.Help.Key
+		shortcutStr := item.Shortcut.Help().Key
 		styledKey := keyStyle.Render(shortcutStr)
 
 		var line string
@@ -96,7 +98,7 @@ func (m *Menu) Render() string {
 		} else {
 			line = itemStyle.Render(item.Label) + padding + styledKey
 		}
-		lines[i] = tui.WithTarget(menuItemTarget(i), line)
+		lines[i] = mouse.Mark(menuItemTarget(i), line)
 	}
 
 	return strings.Join(lines, "\n")
@@ -114,8 +116,8 @@ func (m *Menu) measureItems() {
 	m.padWidth = maxLen + 2
 }
 
-func (m *Menu) selectItem(key int) tui.Cmd {
-	return func() tui.Msg { return MenuSelectMsg{Key: key} }
+func (m *Menu) selectItem(key int) tea.Cmd {
+	return func() tea.Msg { return MenuSelectMsg{Key: key} }
 }
 
 // Helpers

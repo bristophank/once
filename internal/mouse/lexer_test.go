@@ -1,4 +1,4 @@
-package ansi
+package mouse
 
 import (
 	"testing"
@@ -119,44 +119,6 @@ func TestLexer(t *testing.T) {
 
 		tok = l.Next()
 		assert.Equal(t, EOFToken, tok.Type)
-	})
-}
-
-func TestParseCSIParams(t *testing.T) {
-	t.Run("SingleParam", func(t *testing.T) {
-		params := ParseCSIParams("31", nil)
-		assert.Equal(t, []int{31}, params)
-	})
-
-	t.Run("MultipleParams", func(t *testing.T) {
-		params := ParseCSIParams("1;31;44", nil)
-		assert.Equal(t, []int{1, 31, 44}, params)
-	})
-
-	t.Run("Empty", func(t *testing.T) {
-		params := ParseCSIParams("", nil)
-		assert.Equal(t, []int{0}, params)
-	})
-
-	t.Run("RGBColor", func(t *testing.T) {
-		params := ParseCSIParams("38;2;255;128;64", nil)
-		assert.Equal(t, []int{38, 2, 255, 128, 64}, params)
-	})
-
-	t.Run("256Color", func(t *testing.T) {
-		params := ParseCSIParams("38;5;196", nil)
-		assert.Equal(t, []int{38, 5, 196}, params)
-	})
-
-	t.Run("WithEmptyParts", func(t *testing.T) {
-		params := ParseCSIParams("1;;31", nil)
-		assert.Equal(t, []int{1, 0, 31}, params)
-	})
-
-	t.Run("WithBuffer", func(t *testing.T) {
-		var buf [16]int
-		params := ParseCSIParams("1;31;44", buf[:])
-		assert.Equal(t, []int{1, 31, 44}, params)
 	})
 }
 

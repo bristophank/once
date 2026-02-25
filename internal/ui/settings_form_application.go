@@ -1,7 +1,7 @@
 package ui
 
 import (
-	"github.com/basecamp/gliff/tui"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/basecamp/once/internal/docker"
 )
@@ -41,14 +41,14 @@ func NewSettingsFormApplication(settings docker.ApplicationSettings) *SettingsFo
 		),
 	}
 
-	m.form.OnSubmit(func() tui.Cmd {
+	m.form.OnSubmit(func() tea.Cmd {
 		m.settings.Image = m.form.TextField(appImageField).Value()
 		m.settings.Host = m.form.TextField(appHostnameField).Value()
 		m.settings.DisableTLS = !m.form.CheckboxField(appTLSField).Checked()
-		return func() tui.Msg { return SettingsSectionSubmitMsg{Settings: m.settings} }
+		return func() tea.Msg { return SettingsSectionSubmitMsg{Settings: m.settings} }
 	})
-	m.form.OnCancel(func() tui.Cmd {
-		return func() tui.Msg { return SettingsSectionCancelMsg{} }
+	m.form.OnCancel(func() tea.Cmd {
+		return func() tea.Msg { return SettingsSectionCancelMsg{} }
 	})
 
 	return m
@@ -58,16 +58,16 @@ func (m *SettingsFormApplication) Title() string {
 	return "Application"
 }
 
-func (m *SettingsFormApplication) Init() tui.Cmd {
+func (m *SettingsFormApplication) Init() tea.Cmd {
 	return m.form.Init()
 }
 
-func (m *SettingsFormApplication) Update(msg tui.Msg) tui.Cmd {
+func (m *SettingsFormApplication) Update(msg tea.Msg) tea.Cmd {
 	return m.form.Update(msg)
 }
 
 func (m *SettingsFormApplication) StatusLine() string { return "" }
 
-func (m *SettingsFormApplication) Render() string {
-	return m.form.Render()
+func (m *SettingsFormApplication) View() string {
+	return m.form.View()
 }

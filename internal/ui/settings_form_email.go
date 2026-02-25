@@ -1,7 +1,7 @@
 package ui
 
 import (
-	"github.com/basecamp/gliff/tui"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/basecamp/once/internal/docker"
 )
@@ -48,16 +48,16 @@ func NewSettingsFormEmail(settings docker.ApplicationSettings) *SettingsFormEmai
 		),
 	}
 
-	m.form.OnSubmit(func() tui.Cmd {
+	m.form.OnSubmit(func() tea.Cmd {
 		m.settings.SMTP.Server = m.form.TextField(emailServerField).Value()
 		m.settings.SMTP.Port = m.form.TextField(emailPortField).Value()
 		m.settings.SMTP.Username = m.form.TextField(emailUsernameField).Value()
 		m.settings.SMTP.Password = m.form.TextField(emailPasswordField).Value()
 		m.settings.SMTP.From = m.form.TextField(emailFromField).Value()
-		return func() tui.Msg { return SettingsSectionSubmitMsg{Settings: m.settings} }
+		return func() tea.Msg { return SettingsSectionSubmitMsg{Settings: m.settings} }
 	})
-	m.form.OnCancel(func() tui.Cmd {
-		return func() tui.Msg { return SettingsSectionCancelMsg{} }
+	m.form.OnCancel(func() tea.Cmd {
+		return func() tea.Msg { return SettingsSectionCancelMsg{} }
 	})
 
 	return m
@@ -67,16 +67,16 @@ func (m *SettingsFormEmail) Title() string {
 	return "Email"
 }
 
-func (m *SettingsFormEmail) Init() tui.Cmd {
+func (m *SettingsFormEmail) Init() tea.Cmd {
 	return m.form.Init()
 }
 
-func (m *SettingsFormEmail) Update(msg tui.Msg) tui.Cmd {
+func (m *SettingsFormEmail) Update(msg tea.Msg) tea.Cmd {
 	return m.form.Update(msg)
 }
 
 func (m *SettingsFormEmail) StatusLine() string { return "" }
 
-func (m *SettingsFormEmail) Render() string {
-	return m.form.Render()
+func (m *SettingsFormEmail) View() string {
+	return m.form.View()
 }

@@ -4,10 +4,9 @@ import (
 	"context"
 	"fmt"
 
+	"charm.land/bubbles/v2/progress"
+	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
-
-	"github.com/basecamp/gliff/components"
-	"github.com/basecamp/gliff/tui"
 
 	"github.com/basecamp/once/internal/docker"
 )
@@ -46,8 +45,8 @@ type InstallActivity struct {
 	width, height int
 	stage         installStage
 	percentage    int
-	progressBar   *components.ProgressBar
-	progressBusy  *components.ProgressBusy
+	progressBar   progress.Model
+	progressBusy  *ProgressBusy
 	progressChan  chan installProgressMsg
 	doneChan      chan installDoneMsg
 }
@@ -63,45 +62,42 @@ func NewInstallActivity(ns *docker.Namespace, imageRef, hostname string) *Instal
 	}
 }
 
-func (m *InstallActivity) Init() tui.Cmd {
-	var busyInit tui.Cmd
+func (m *InstallActivity) Init() tea.Cmd {
+	var busyInit tea.Cmd
 	if m.progressBusy != nil {
 		busyInit = m.progressBusy.Init()
 	}
-	return tui.Batch(busyInit, m.startInstall(), m.waitForProgress())
+	return tea.Batch(busyInit, m.startInstall(), m.waitForProgress())
 }
 
-func (m *InstallActivity) Update(msg tui.Msg) tui.Cmd {
+func (m *InstallActivity) Update(msg tea.Msg) tea.Cmd {
 	switch msg := msg.(type) {
-	case tui.WindowSizeMsg:
+	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
 		progressWidth := min(m.width-4, 60)
-		m.progressBar = components.NewProgressBar(progressWidth, Colors.Primary)
-		m.progressBar.Total = 100
-		m.progressBusy = components.NewProgressBusy(progressWidth, Colors.Primary)
+		m.progressBar = progress.New(progress.WithColors(Colors.Primary))
+		m.progressBar.SetWidth(progressWidth)
+		m.progressBusy = NewProgressBusy(progressWidth, Colors.Primary)
 
 	case installProgressMsg:
 		m.stage = msg.stage
 		m.percentage = msg.percentage
-		if m.progressBar != nil {
-			m.progressBar.Current = float64(msg.percentage)
-		}
 		if msg.stage == stageStarting || msg.stage == stageVerifying {
-			var busyInit tui.Cmd
+			var busyInit tea.Cmd
 			if m.progressBusy != nil {
 				busyInit = m.progressBusy.Init()
 			}
-			return tui.Batch(busyInit, m.waitForProgress())
+			return tea.Batch(busyInit, m.waitForProgress())
 		}
 		return m.waitForProgress()
 
 	case installDoneMsg:
 		if msg.err != nil {
-			return func() tui.Msg { return InstallActivityFailedMsg{Err: msg.err} }
+			return func() tea.Msg { return InstallActivityFailedMsg{Err: msg.err} }
 		}
-		return func() tui.Msg { return InstallActivityDoneMsg{App: msg.app} }
+		return func() tea.Msg { return InstallActivityDoneMsg{App: msg.app} }
 
-	case components.ProgressBusyTickMsg:
+	case ProgressBusyTickMsg:
 		if m.progressBusy != nil {
 			return m.progressBusy.Update(msg)
 		}
@@ -110,7 +106,7 @@ func (m *InstallActivity) Update(msg tui.Msg) tui.Cmd {
 	return nil
 }
 
-func (m *InstallActivity) Render() string {
+func (m *InstallActivity) View() string {
 	var status string
 	switch m.stage {
 	case stagePreparing:
@@ -129,12 +125,10 @@ func (m *InstallActivity) Render() string {
 	switch m.stage {
 	case stagePreparing, stageStarting, stageVerifying:
 		if m.progressBusy != nil {
-			progressView = Styles.CenteredLine(m.width, m.progressBusy.Render())
+			progressView = Styles.CenteredLine(m.width, m.progressBusy.View())
 		}
 	case stageDownloading:
-		if m.progressBar != nil {
-			progressView = Styles.CenteredLine(m.width, m.progressBar.Render())
-		}
+		progressView = Styles.CenteredLine(m.width, m.progressBar.ViewAs(float64(m.percentage)/100.0))
 	}
 
 	return lipgloss.JoinVertical(lipgloss.Left, statusLine, progressView)
@@ -142,15 +136,15 @@ func (m *InstallActivity) Render() string {
 
 // Private
 
-func (m *InstallActivity) startInstall() tui.Cmd {
-	return func() tui.Msg {
+func (m *InstallActivity) startInstall() tea.Cmd {
+	return func() tea.Msg {
 		go m.runInstall()
 		return nil
 	}
 }
 
-func (m *InstallActivity) waitForProgress() tui.Cmd {
-	return func() tui.Msg {
+func (m *InstallActivity) waitForProgress() tea.Cmd {
+	return func() tea.Msg {
 		select {
 		case progress, ok := <-m.progressChan:
 			if ok {

@@ -3,7 +3,7 @@ package ui
 import (
 	"context"
 
-	"github.com/basecamp/gliff/tui"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/basecamp/once/internal/docker"
 )
@@ -29,7 +29,7 @@ func NewSettingsFormUpdates(app *docker.Application, lastResult *docker.Operatio
 		lastResult: lastResult,
 	}
 
-	m.form.SetActionButton("Check for updates", func() tui.Msg {
+	m.form.SetActionButton("Check for updates", func() tea.Msg {
 		return settingsRunActionMsg{action: func() (string, error) {
 			changed, err := app.Update(context.Background(), nil)
 			if err != nil {
@@ -41,12 +41,12 @@ func NewSettingsFormUpdates(app *docker.Application, lastResult *docker.Operatio
 			return "Update complete", nil
 		}}
 	})
-	m.form.OnSubmit(func() tui.Cmd {
+	m.form.OnSubmit(func() tea.Cmd {
 		m.settings.AutoUpdate = m.form.CheckboxField(updatesAutoUpdateField).Checked()
-		return func() tui.Msg { return SettingsSectionSubmitMsg{Settings: m.settings} }
+		return func() tea.Msg { return SettingsSectionSubmitMsg{Settings: m.settings} }
 	})
-	m.form.OnCancel(func() tui.Cmd {
-		return func() tui.Msg { return SettingsSectionCancelMsg{} }
+	m.form.OnCancel(func() tea.Cmd {
+		return func() tea.Msg { return SettingsSectionCancelMsg{} }
 	})
 
 	return m
@@ -56,16 +56,16 @@ func (m *SettingsFormUpdates) Title() string {
 	return "Updates"
 }
 
-func (m *SettingsFormUpdates) Init() tui.Cmd {
+func (m *SettingsFormUpdates) Init() tea.Cmd {
 	return m.form.Init()
 }
 
-func (m *SettingsFormUpdates) Update(msg tui.Msg) tui.Cmd {
+func (m *SettingsFormUpdates) Update(msg tea.Msg) tea.Cmd {
 	return m.form.Update(msg)
 }
 
-func (m *SettingsFormUpdates) Render() string {
-	return m.form.Render()
+func (m *SettingsFormUpdates) View() string {
+	return m.form.View()
 }
 
 func (m *SettingsFormUpdates) StatusLine() string {

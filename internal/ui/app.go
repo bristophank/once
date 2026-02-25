@@ -4,18 +4,21 @@ import (
 	"context"
 	"log/slog"
 	"sync"
+	"time"
 
-	"github.com/basecamp/gliff/tui"
+	"charm.land/bubbles/v2/key"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/basecamp/once/internal/docker"
 	"github.com/basecamp/once/internal/metrics"
+	"github.com/basecamp/once/internal/mouse"
 	"github.com/basecamp/once/internal/version"
 )
 
 var appKeys = struct {
-	Quit KeyBinding
+	Quit key.Binding
 }{
-	Quit: NewKeyBinding(Key(tui.KeyCtrlC)).WithHelp("ctrl+c", "quit"),
+	Quit: WithHelp(NewKeyBinding("ctrl+c"), "ctrl+c", "quit"),
 }
 
 type (
@@ -51,8 +54,8 @@ type App struct {
 	namespace       *docker.Namespace
 	scraper         *metrics.MetricsScraper
 	dockerScraper   *docker.Scraper
-	currentScreen   tui.Component
-	lastSize        tui.WindowSizeMsg
+	currentScreen   Component
+	lastSize        tea.WindowSizeMsg
 	eventChan       <-chan struct{}
 	watchCtx        context.Context
 	watchCancel     context.CancelFunc
@@ -79,7 +82,7 @@ func NewApp(ns *docker.Namespace, installImageRef string) *App {
 		BufferSize: ChartHistoryLength,
 	})
 
-	var screen tui.Component
+	var screen Component
 	if len(apps) > 0 && installImageRef == "" {
 		screen = NewDashboard(ns, apps, 0, scraper, dockerScraper)
 	} else {
@@ -98,8 +101,8 @@ func NewApp(ns *docker.Namespace, installImageRef string) *App {
 	}
 }
 
-func (m *App) Init() tui.Cmd {
-	return tui.Batch(
+func (m *App) Init() tea.Cmd {
+	return tea.Batch(
 		m.currentScreen.Init(),
 		m.watchForChanges(),
 		m.runScrape(),
@@ -107,30 +110,51 @@ func (m *App) Init() tui.Cmd {
 	)
 }
 
-func (m *App) Update(msg tui.Msg) tui.Cmd {
+func (m *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
-	case tui.WindowSizeMsg:
+	case tea.WindowSizeMsg:
 		m.lastSize = msg
-	case tui.KeyMsg:
-		if appKeys.Quit.Matches(msg) {
+
+	case tea.MouseClickMsg:
+		ms := msg.Mouse()
+		target := mouse.Resolve(ms.X, ms.Y)
+		cmd := m.currentScreen.Update(MouseEvent{
+			X:       ms.X,
+			Y:       ms.Y,
+			Button:  ms.Button,
+			Target:  target,
+			IsClick: true,
+		})
+		return m, cmd
+
+	case tea.MouseReleaseMsg, tea.MouseMotionMsg, tea.MouseWheelMsg:
+		return m, nil
+
+	case tea.KeyPressMsg:
+		if key.Matches(msg, appKeys.Quit) {
 			m.shutdown()
-			return tui.Quit
+			return m, tea.Quit
 		}
+
 	case namespaceChangedMsg:
 		_ = m.namespace.Refresh(m.watchCtx)
 		m.currentScreen.Update(msg)
-		return m.watchForChanges()
+		return m, m.watchForChanges()
+
 	case scrapeTickMsg:
-		return tui.Batch(
+		return m, tea.Batch(
 			m.runScrape(),
 			m.scheduleNextScrapeTick(),
 		)
+
 	case scrapeDoneMsg:
 		m.currentScreen.Update(msg)
+
 	case navigateToInstallMsg:
 		m.currentScreen = NewInstall(m.namespace, "")
 		m.currentScreen.Update(m.lastSize)
-		return m.currentScreen.Init()
+		return m, m.currentScreen.Init()
+
 	case navigateToAppMsg:
 		_ = m.namespace.Refresh(m.watchCtx)
 		apps := m.namespace.Applications()
@@ -143,7 +167,8 @@ func (m *App) Update(msg tui.Msg) tui.Cmd {
 		}
 		m.currentScreen = NewDashboard(m.namespace, apps, targetIndex, m.scraper, m.dockerScraper)
 		m.currentScreen.Update(m.lastSize)
-		return m.currentScreen.Init()
+		return m, m.currentScreen.Init()
+
 	case navigateToDashboardMsg:
 		_ = m.namespace.Refresh(m.watchCtx)
 		apps := m.namespace.Applications()
@@ -157,28 +182,38 @@ func (m *App) Update(msg tui.Msg) tui.Cmd {
 			}
 			m.currentScreen = NewDashboard(m.namespace, apps, selectedIndex, m.scraper, m.dockerScraper)
 			m.currentScreen.Update(m.lastSize)
-			return m.currentScreen.Init()
+			return m, m.currentScreen.Init()
 		}
 		m.shutdown()
-		return func() tui.Msg { return tui.QuitMsg{} }
+		return m, tea.Quit
+
 	case navigateToSettingsSectionMsg:
 		m.currentScreen = NewSettings(m.namespace, msg.app, msg.section)
 		m.currentScreen.Update(m.lastSize)
-		return m.currentScreen.Init()
+		return m, m.currentScreen.Init()
+
 	case navigateToLogsMsg:
 		m.currentScreen = NewLogs(m.namespace, msg.app)
 		m.currentScreen.Update(m.lastSize)
-		return m.currentScreen.Init()
+		return m, m.currentScreen.Init()
+
 	case quitMsg:
 		m.shutdown()
-		return func() tui.Msg { return tui.QuitMsg{} }
+		return m, tea.Quit
 	}
 
-	return m.currentScreen.Update(msg)
+	cmd := m.currentScreen.Update(msg)
+	return m, cmd
 }
 
-func (m *App) Render() string {
-	return m.currentScreen.Render()
+func (m *App) View() tea.View {
+	content := m.currentScreen.View()
+	cleaned := mouse.Sweep(content)
+
+	v := tea.NewView(cleaned)
+	v.AltScreen = true
+	v.MouseMode = tea.MouseModeAllMotion
+	return v
 }
 
 func Run(ns *docker.Namespace, installImageRef string) error {
@@ -186,21 +221,22 @@ func Run(ns *docker.Namespace, installImageRef string) error {
 	defer func() { slog.Info("Stopping ONCE UI") }()
 
 	app := NewApp(ns, installImageRef)
-	return tui.NewApplication(app).Run()
+	_, err := tea.NewProgram(app).Run()
+	return err
 }
 
 // Private
 
-func (m *App) scheduleNextScrapeTick() tui.Cmd {
-	return tui.Every(ChartUpdateInterval, func() tui.Msg { return scrapeTickMsg{} })
+func (m *App) scheduleNextScrapeTick() tea.Cmd {
+	return tea.Every(ChartUpdateInterval, func(time.Time) tea.Msg { return scrapeTickMsg{} })
 }
 
 func (m *App) shutdown() {
 	m.watchCancel()
 }
 
-func (m *App) runScrape() tui.Cmd {
-	return func() tui.Msg {
+func (m *App) runScrape() tea.Cmd {
+	return func() tea.Msg {
 		var wg sync.WaitGroup
 		wg.Add(2)
 		go func() {
@@ -216,8 +252,8 @@ func (m *App) runScrape() tui.Cmd {
 	}
 }
 
-func (m *App) watchForChanges() tui.Cmd {
-	return func() tui.Msg {
+func (m *App) watchForChanges() tea.Cmd {
+	return func() tea.Msg {
 		_, ok := <-m.eventChan
 		if !ok {
 			return nil

@@ -2,8 +2,7 @@ package ui
 
 import (
 	"charm.land/lipgloss/v2"
-
-	"github.com/basecamp/gliff/tui"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/basecamp/once/internal/docker"
 )
@@ -67,16 +66,16 @@ func NewInstallForm(imageRef string) *InstallForm {
 		imageRef: imageRef,
 	}
 
-	m.form.OnSubmit(func() tui.Cmd {
-		return func() tui.Msg {
+	m.form.OnSubmit(func() tea.Cmd {
+		return func() tea.Msg {
 			return InstallFormSubmitMsg{
 				ImageRef: m.ImageRef(),
 				Hostname: m.form.TextField(installHostnameField).Value(),
 			}
 		}
 	})
-	m.form.OnCancel(func() tui.Cmd {
-		return func() tui.Msg { return InstallFormCancelMsg{} }
+	m.form.OnCancel(func() tea.Cmd {
+		return func() tea.Msg { return InstallFormCancelMsg{} }
 	})
 
 	if imageRef != "" {
@@ -86,11 +85,11 @@ func NewInstallForm(imageRef string) *InstallForm {
 	return m
 }
 
-func (m *InstallForm) Init() tui.Cmd {
+func (m *InstallForm) Init() tea.Cmd {
 	return m.form.Init()
 }
 
-func (m *InstallForm) Update(msg tui.Msg) tui.Cmd {
+func (m *InstallForm) Update(msg tea.Msg) tea.Cmd {
 	prev := m.form.Focused()
 
 	cmd := m.form.Update(msg)
@@ -103,8 +102,8 @@ func (m *InstallForm) Update(msg tui.Msg) tui.Cmd {
 	return cmd
 }
 
-func (m *InstallForm) Render() string {
-	return m.form.Render()
+func (m *InstallForm) View() string {
+	return m.form.View()
 }
 
 func (m *InstallForm) ImageRef() string {

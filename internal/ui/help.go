@@ -4,14 +4,16 @@ import (
 	"strconv"
 	"strings"
 
+	"charm.land/bubbles/v2/key"
+	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
-	"github.com/basecamp/gliff/tui"
+	"github.com/basecamp/once/internal/mouse"
 )
 
 type Help struct {
 	width    int
-	bindings []KeyBinding
+	bindings []key.Binding
 }
 
 func NewHelp() Help {
@@ -22,14 +24,15 @@ func (h *Help) SetWidth(w int) {
 	h.width = w
 }
 
-func (h *Help) Update(msg tui.Msg) tui.Cmd {
-	if msg, ok := msg.(tui.MouseMsg); ok {
-		if msg.Type == tui.MousePress && msg.Button == tui.MouseLeft {
+func (h *Help) Update(msg tea.Msg) tea.Cmd {
+	if msg, ok := msg.(MouseEvent); ok {
+		if msg.IsClick {
 			for i, kb := range h.bindings {
-				if msg.Target == helpTarget(i) && len(kb.Keys) > 0 {
-					spec := kb.Keys[0]
-					return func() tui.Msg {
-						return tui.KeyMsg{Key: tui.Key{Type: spec.Type, Rune: spec.Rune}}
+				keys := kb.Keys()
+				if msg.Target == helpTarget(i) && len(keys) > 0 {
+					first := keys[0]
+					return func() tea.Msg {
+						return tea.KeyPressMsg(tea.Key{Text: first})
 					}
 				}
 			}
@@ -38,7 +41,7 @@ func (h *Help) Update(msg tui.Msg) tui.Cmd {
 	return nil
 }
 
-func (h *Help) Render(bindings []KeyBinding) string {
+func (h *Help) View(bindings []key.Binding) string {
 	h.bindings = bindings
 
 	keyStyle := lipgloss.NewStyle().Bold(true)
@@ -54,10 +57,11 @@ func (h *Help) Render(bindings []KeyBinding) string {
 
 	var items []helpItem
 	for i, kb := range bindings {
-		if kb.Help.Key == "" {
+		help := kb.Help()
+		if help.Key == "" {
 			continue
 		}
-		rendered := keyStyle.Render(kb.Help.Key) + " " + descStyle.Render(kb.Help.Desc)
+		rendered := keyStyle.Render(help.Key) + " " + descStyle.Render(help.Desc)
 		items = append(items, helpItem{str: rendered, width: lipgloss.Width(rendered), index: i})
 	}
 
@@ -80,7 +84,7 @@ func (h *Help) Render(bindings []KeyBinding) string {
 			line.WriteString(separator)
 			lineWidth += sepWidth
 		}
-		line.WriteString(tui.WithTarget(helpTarget(it.index), it.str))
+		line.WriteString(mouse.Mark(helpTarget(it.index), it.str))
 		lineWidth += it.width
 	}
 	if line.Len() > 0 {

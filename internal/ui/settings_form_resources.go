@@ -3,7 +3,7 @@ package ui
 import (
 	"strconv"
 
-	"github.com/basecamp/gliff/tui"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/basecamp/once/internal/docker"
 )
@@ -41,13 +41,13 @@ func NewSettingsFormResources(settings docker.ApplicationSettings) *SettingsForm
 		),
 	}
 
-	m.form.OnSubmit(func() tui.Cmd {
+	m.form.OnSubmit(func() tea.Cmd {
 		m.settings.Resources.CPUs, _ = strconv.Atoi(m.form.TextField(resourcesCPUField).Value())
 		m.settings.Resources.MemoryMB, _ = strconv.Atoi(m.form.TextField(resourcesMemoryField).Value())
-		return func() tui.Msg { return SettingsSectionSubmitMsg{Settings: m.settings} }
+		return func() tea.Msg { return SettingsSectionSubmitMsg{Settings: m.settings} }
 	})
-	m.form.OnCancel(func() tui.Cmd {
-		return func() tui.Msg { return SettingsSectionCancelMsg{} }
+	m.form.OnCancel(func() tea.Cmd {
+		return func() tea.Msg { return SettingsSectionCancelMsg{} }
 	})
 
 	return m
@@ -57,16 +57,16 @@ func (m *SettingsFormResources) Title() string {
 	return "Resources"
 }
 
-func (m *SettingsFormResources) Init() tui.Cmd {
+func (m *SettingsFormResources) Init() tea.Cmd {
 	return m.form.Init()
 }
 
-func (m *SettingsFormResources) Update(msg tui.Msg) tui.Cmd {
+func (m *SettingsFormResources) Update(msg tea.Msg) tea.Cmd {
 	return m.form.Update(msg)
 }
 
 func (m *SettingsFormResources) StatusLine() string { return "" }
 
-func (m *SettingsFormResources) Render() string {
-	return m.form.Render()
+func (m *SettingsFormResources) View() string {
+	return m.form.View()
 }

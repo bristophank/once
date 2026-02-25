@@ -1,4 +1,4 @@
-package ansi
+package mouse
 
 import "strings"
 
@@ -44,44 +44,6 @@ func (l *Lexer) Next() Token {
 	}
 
 	return l.readText()
-}
-
-// ParseCSIParams parses semicolon/colon-separated integers from a CSI parameter string.
-// If buf is provided, it is reused to avoid allocation; results may exceed buf's capacity
-// via append if needed.
-func ParseCSIParams(s string, buf []int) []int {
-	params := buf[:0]
-
-	if s == "" {
-		return append(params, 0)
-	}
-
-	var current int
-	hasCurrent := false
-
-	for i := range len(s) {
-		b := s[i]
-		if b >= '0' && b <= '9' {
-			current = current*10 + int(b-'0')
-			hasCurrent = true
-		} else if b == ';' || b == ':' {
-			if hasCurrent {
-				params = append(params, current)
-			} else {
-				params = append(params, 0)
-			}
-			current = 0
-			hasCurrent = false
-		}
-	}
-
-	if hasCurrent {
-		params = append(params, current)
-	} else if len(params) == 0 {
-		params = append(params, 0)
-	}
-
-	return params
 }
 
 // ParseCSIParam parses a single integer from a CSI parameter string.

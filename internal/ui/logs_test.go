@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/basecamp/gliff/components"
-	"github.com/basecamp/gliff/tui"
+	"charm.land/bubbles/v2/textinput"
+	"charm.land/bubbles/v2/viewport"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -13,13 +13,22 @@ import (
 )
 
 func newTestLogs() *Logs {
+	vp := viewport.New()
+	vp.MouseWheelEnabled = false
+	vp.KeyMap = viewport.KeyMap{}
+	vp.SoftWrap = true
+
+	fi := textinput.New()
+	fi.Placeholder = "Filter logs"
+	fi.CharLimit = 256
+
 	return &Logs{
 		app: &docker.Application{
 			Settings: docker.ApplicationSettings{Name: "testapp"},
 		},
 		streamer:      newTestLogStreamerForUI(),
-		viewport:      components.NewViewport(),
-		filterInput:   components.NewTextField(),
+		viewport:      vp,
+		filterInput:   fi,
 		filterEnabled: true,
 		help:          NewHelp(),
 	}
@@ -33,7 +42,7 @@ func TestLogsFilterActivation(t *testing.T) {
 	m := newTestLogs()
 	m.filterActive = false
 
-	m.Update(runeMsg('/'))
+	m.Update(runeKeyMsg('/'))
 
 	assert.True(t, m.filterActive)
 }
@@ -43,7 +52,7 @@ func TestLogsFilterAppliesOnKeypress(t *testing.T) {
 	m.filterActive = true
 	m.filterInput.SetValue("err")
 
-	m.Update(runeMsg('o'))
+	m.Update(runeKeyMsg('o'))
 
 	assert.Equal(t, m.filterInput.Value(), m.filterText)
 }
@@ -54,7 +63,7 @@ func TestLogsFilterClearedOnEscape(t *testing.T) {
 	m.filterText = "error"
 	m.filterInput.SetValue("error")
 
-	m.Update(keyMsg(tui.KeyEscape, 0))
+	m.Update(keyPressMsg("esc"))
 
 	assert.False(t, m.filterActive)
 	assert.Equal(t, "", m.filterText)
@@ -65,7 +74,7 @@ func TestLogsBackNavigation(t *testing.T) {
 	m := newTestLogs()
 	m.filterActive = false
 
-	cmd := m.Update(keyMsg(tui.KeyEscape, 0))
+	cmd := m.Update(keyPressMsg("esc"))
 	require.NotNil(t, cmd)
 
 	msg := cmd()

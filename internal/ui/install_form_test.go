@@ -3,7 +3,6 @@ package ui
 import (
 	"testing"
 
-	"github.com/basecamp/gliff/tui"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -23,7 +22,7 @@ func TestInstallForm_FillAndSubmit(t *testing.T) {
 	installPressEnter(form)
 	assert.Equal(t, 2, form.form.Focused(), "submit button")
 
-	cmd := form.Update(keyMsg(tui.KeyEnter, 0))
+	cmd := form.Update(keyPressMsg("enter"))
 	require.NotNil(t, cmd)
 
 	msg := cmd()
@@ -68,7 +67,7 @@ func TestInstallForm_CancelButton(t *testing.T) {
 	}
 	assert.Equal(t, 3, form.form.Focused(), "cancel button")
 
-	cmd := form.Update(keyMsg(tui.KeyEnter, 0))
+	cmd := form.Update(keyPressMsg("enter"))
 	require.NotNil(t, cmd)
 
 	msg := cmd()
@@ -80,18 +79,18 @@ func TestInstallForm_CancelButton(t *testing.T) {
 
 func installTypeText(form *InstallForm, text string) {
 	for _, r := range text {
-		form.Update(runeMsg(r))
+		form.Update(runeKeyMsg(r))
 	}
 }
 
 func installPressEnter(form *InstallForm) {
-	form.Update(keyMsg(tui.KeyEnter, 0))
+	form.Update(keyPressMsg("enter"))
 }
 
 func installPressTab(form *InstallForm) {
-	form.Update(keyMsg(tui.KeyTab, 0))
+	form.Update(keyPressMsg("tab"))
 }
 
 func installPressShiftTab(form *InstallForm) {
-	form.Update(keyMsg(tui.KeyShiftTab, 0))
+	form.Update(keyPressMsg("shift+tab"))
 }

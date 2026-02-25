@@ -3,7 +3,6 @@ package ui
 import (
 	"testing"
 
-	"github.com/basecamp/gliff/tui"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -94,14 +93,14 @@ func TestSettingsFormApplication_SpaceDoesNotToggleTLSForLocalhost(t *testing.T)
 
 func TestSettingsFormApplication_TLSShowsDisabledForLocalhost(t *testing.T) {
 	form := NewSettingsFormApplication(docker.ApplicationSettings{Host: "app.example.com"})
-	assert.Equal(t, "[✓] Enabled", form.form.CheckboxField(appTLSField).Render())
+	assert.Equal(t, "[✓] Enabled", form.form.CheckboxField(appTLSField).View())
 
 	applicationPressTab(form)
 	applicationTypeText(form, ".localhost")
-	assert.Equal(t, "Not available for localhost", form.form.CheckboxField(appTLSField).Render())
+	assert.Equal(t, "Not available for localhost", form.form.CheckboxField(appTLSField).View())
 
 	applicationClearAndType(form, "app.example.com")
-	assert.Equal(t, "[✓] Enabled", form.form.CheckboxField(appTLSField).Render())
+	assert.Equal(t, "[✓] Enabled", form.form.CheckboxField(appTLSField).View())
 }
 
 func TestSettingsFormApplication_Submit(t *testing.T) {
@@ -115,7 +114,7 @@ func TestSettingsFormApplication_Submit(t *testing.T) {
 		applicationPressTab(form)
 	}
 
-	cmd := form.Update(keyMsg(tui.KeyEnter, 0))
+	cmd := form.Update(keyPressMsg("enter"))
 	require.NotNil(t, cmd)
 	msg := cmd()
 	submitMsg, ok := msg.(SettingsSectionSubmitMsg)
@@ -133,7 +132,7 @@ func TestSettingsFormApplication_Cancel(t *testing.T) {
 		applicationPressTab(form)
 	}
 
-	cmd := form.Update(keyMsg(tui.KeyEnter, 0))
+	cmd := form.Update(keyPressMsg("enter"))
 	require.NotNil(t, cmd)
 	msg := cmd()
 	_, ok := msg.(SettingsSectionCancelMsg)
@@ -200,7 +199,7 @@ func TestSettingsFormEmail_Submit(t *testing.T) {
 		emailPressTab(form)
 	}
 
-	cmd := form.Update(keyMsg(tui.KeyEnter, 0))
+	cmd := form.Update(keyPressMsg("enter"))
 	require.NotNil(t, cmd)
 	msg := cmd()
 	submitMsg, ok := msg.(SettingsSectionSubmitMsg)
@@ -217,7 +216,7 @@ func TestSettingsFormEmail_Cancel(t *testing.T) {
 		emailPressTab(form)
 	}
 
-	cmd := form.Update(keyMsg(tui.KeyEnter, 0))
+	cmd := form.Update(keyPressMsg("enter"))
 	require.NotNil(t, cmd)
 	msg := cmd()
 	_, ok := msg.(SettingsSectionCancelMsg)
@@ -271,7 +270,7 @@ func TestSettingsFormResources_Submit(t *testing.T) {
 	resourcesTypeText(form, "1024")
 	resourcesPressTab(form)
 
-	cmd := form.Update(keyMsg(tui.KeyEnter, 0))
+	cmd := form.Update(keyPressMsg("enter"))
 	require.NotNil(t, cmd)
 	msg := cmd()
 	submitMsg, ok := msg.(SettingsSectionSubmitMsg)
@@ -287,7 +286,7 @@ func TestSettingsFormResources_SubmitBlank(t *testing.T) {
 	resourcesPressTab(form)
 	resourcesPressTab(form)
 
-	cmd := form.Update(keyMsg(tui.KeyEnter, 0))
+	cmd := form.Update(keyPressMsg("enter"))
 	require.NotNil(t, cmd)
 	msg := cmd()
 	submitMsg, ok := msg.(SettingsSectionSubmitMsg)
@@ -303,7 +302,7 @@ func TestSettingsFormResources_Cancel(t *testing.T) {
 		resourcesPressTab(form)
 	}
 
-	cmd := form.Update(keyMsg(tui.KeyEnter, 0))
+	cmd := form.Update(keyPressMsg("enter"))
 	require.NotNil(t, cmd)
 	msg := cmd()
 	_, ok := msg.(SettingsSectionCancelMsg)
@@ -330,7 +329,7 @@ func TestSettingsFormBackups_ActionReadsCurrentFieldValue(t *testing.T) {
 	backupsPressTab(form)
 	assert.Equal(t, form.form.actionIndex(), form.form.Focused(), "action button focused")
 
-	cmd := form.Update(keyMsg(tui.KeyEnter, 0))
+	cmd := form.Update(keyPressMsg("enter"))
 	require.NotNil(t, cmd)
 	msg := cmd()
 	actionMsg, ok := msg.(settingsRunActionMsg)
@@ -359,7 +358,7 @@ func TestSettingsFormBackups_Submit(t *testing.T) {
 	// Tab to Done
 	backupsPressTab(form)
 
-	cmd := form.Update(keyMsg(tui.KeyEnter, 0))
+	cmd := form.Update(keyPressMsg("enter"))
 	require.NotNil(t, cmd)
 	msg := cmd()
 	submitMsg, ok := msg.(SettingsSectionSubmitMsg)
@@ -372,7 +371,7 @@ func TestSettingsFormBackups_Submit(t *testing.T) {
 
 func applicationTypeText(form *SettingsFormApplication, text string) {
 	for _, r := range text {
-		form.Update(runeMsg(r))
+		form.Update(runeKeyMsg(r))
 	}
 }
 
@@ -382,41 +381,41 @@ func applicationClearAndType(form *SettingsFormApplication, text string) {
 }
 
 func applicationPressTab(form *SettingsFormApplication) {
-	form.Update(keyMsg(tui.KeyTab, 0))
+	form.Update(keyPressMsg("tab"))
 }
 
 func applicationPressShiftTab(form *SettingsFormApplication) {
-	form.Update(keyMsg(tui.KeyShiftTab, 0))
+	form.Update(keyPressMsg("shift+tab"))
 }
 
 func applicationPressSpace(form *SettingsFormApplication) {
-	form.Update(runeMsg(' '))
+	form.Update(runeKeyMsg(' '))
 }
 
 func emailPressTab(form *SettingsFormEmail) {
-	form.Update(keyMsg(tui.KeyTab, 0))
+	form.Update(keyPressMsg("tab"))
 }
 
 func resourcesPressTab(form *SettingsFormResources) {
-	form.Update(keyMsg(tui.KeyTab, 0))
+	form.Update(keyPressMsg("tab"))
 }
 
 func resourcesTypeText(form *SettingsFormResources, text string) {
 	for _, r := range text {
-		form.Update(runeMsg(r))
+		form.Update(runeKeyMsg(r))
 	}
 }
 
 func backupsPressTab(form *SettingsFormBackups) {
-	form.Update(keyMsg(tui.KeyTab, 0))
+	form.Update(keyPressMsg("tab"))
 }
 
 func backupsPressSpace(form *SettingsFormBackups) {
-	form.Update(runeMsg(' '))
+	form.Update(runeKeyMsg(' '))
 }
 
 func backupsTypeText(form *SettingsFormBackups, text string) {
 	for _, r := range text {
-		form.Update(runeMsg(r))
+		form.Update(runeKeyMsg(r))
 	}
 }

@@ -3,7 +3,7 @@ package ui
 import (
 	"testing"
 
-	"github.com/basecamp/gliff/tui"
+	tea "charm.land/bubbletea/v2"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -64,7 +64,7 @@ func TestForm_SubmitAction(t *testing.T) {
 		FormItem{Label: "Field", Field: NewTextField("val")},
 	)
 	submitted := false
-	form.OnSubmit(func() tui.Cmd {
+	form.OnSubmit(func() tea.Cmd {
 		submitted = true
 		return nil
 	})
@@ -72,7 +72,7 @@ func TestForm_SubmitAction(t *testing.T) {
 	formPressTab(form)
 	assert.Equal(t, 1, form.Focused(), "submit button")
 
-	form.Update(keyMsg(tui.KeyEnter, 0))
+	form.Update(keyPressMsg("enter"))
 	assert.True(t, submitted)
 }
 
@@ -81,7 +81,7 @@ func TestForm_CancelAction(t *testing.T) {
 		FormItem{Label: "Field", Field: NewTextField("val")},
 	)
 	cancelled := false
-	form.OnCancel(func() tui.Cmd {
+	form.OnCancel(func() tea.Cmd {
 		cancelled = true
 		return nil
 	})
@@ -90,7 +90,7 @@ func TestForm_CancelAction(t *testing.T) {
 	formPressTab(form)
 	assert.Equal(t, 2, form.Focused(), "cancel button")
 
-	form.Update(keyMsg(tui.KeyEnter, 0))
+	form.Update(keyPressMsg("enter"))
 	assert.True(t, cancelled)
 }
 
@@ -110,13 +110,13 @@ func TestTextField_DigitsOnly(t *testing.T) {
 	field.SetDigitsOnly(true)
 	field.Focus()
 
-	field.Update(runeMsg('5'))
+	field.Update(runeKeyMsg('5'))
 	assert.Equal(t, "5", field.Value())
 
-	field.Update(runeMsg('a'))
+	field.Update(runeKeyMsg('a'))
 	assert.Equal(t, "5", field.Value(), "non-digit rejected")
 
-	field.Update(runeMsg('3'))
+	field.Update(runeKeyMsg('3'))
 	assert.Equal(t, "53", field.Value())
 }
 
@@ -124,19 +124,19 @@ func TestCheckboxField_Toggle(t *testing.T) {
 	field := NewCheckboxField("Enable", false)
 	assert.False(t, field.Checked())
 
-	field.Update(runeMsg(' '))
+	field.Update(keyPressMsg("space"))
 	assert.True(t, field.Checked())
 
-	field.Update(runeMsg(' '))
+	field.Update(keyPressMsg("space"))
 	assert.False(t, field.Checked())
 }
 
 func TestCheckboxField_Render(t *testing.T) {
 	field := NewCheckboxField("TLS", true)
-	assert.Equal(t, "[✓] TLS", field.Render())
+	assert.Equal(t, "[✓] TLS", field.View())
 
-	field.Update(runeMsg(' '))
-	assert.Equal(t, "[ ] TLS", field.Render())
+	field.Update(keyPressMsg("space"))
+	assert.Equal(t, "[ ] TLS", field.View())
 }
 
 func TestCheckboxField_DisabledWhen(t *testing.T) {
@@ -146,14 +146,14 @@ func TestCheckboxField_DisabledWhen(t *testing.T) {
 		return disabled, "Not available"
 	})
 
-	field.Update(runeMsg(' '))
+	field.Update(keyPressMsg("space"))
 	assert.False(t, field.Checked(), "toggle ignored when disabled")
-	assert.Equal(t, "Not available", field.Render())
+	assert.Equal(t, "Not available", field.View())
 
 	disabled = false
-	field.Update(runeMsg(' '))
+	field.Update(keyPressMsg("space"))
 	assert.True(t, field.Checked(), "toggle works when enabled")
-	assert.Equal(t, "[✓] TLS", field.Render())
+	assert.Equal(t, "[✓] TLS", field.View())
 }
 
 func TestForm_FieldValuesAccessible(t *testing.T) {
@@ -170,7 +170,7 @@ func TestForm_ValidationBlocksSubmitWhenRequiredEmpty(t *testing.T) {
 		FormItem{Label: "Name", Field: NewTextField("name"), Required: true},
 	)
 	submitted := false
-	form.OnSubmit(func() tui.Cmd {
+	form.OnSubmit(func() tea.Cmd {
 		submitted = true
 		return nil
 	})
@@ -188,7 +188,7 @@ func TestForm_ValidationAllowsSubmitWhenRequiredFilled(t *testing.T) {
 		FormItem{Label: "Name", Field: NewTextField("name"), Required: true},
 	)
 	submitted := false
-	form.OnSubmit(func() tui.Cmd {
+	form.OnSubmit(func() tea.Cmd {
 		submitted = true
 		return nil
 	})
@@ -206,7 +206,7 @@ func TestForm_ValidationTreatsWhitespaceAsEmpty(t *testing.T) {
 		FormItem{Label: "Name", Field: NewTextField("name"), Required: true},
 	)
 	submitted := false
-	form.OnSubmit(func() tui.Cmd {
+	form.OnSubmit(func() tea.Cmd {
 		submitted = true
 		return nil
 	})
@@ -223,7 +223,7 @@ func TestForm_ValidationErrorClearsOnInput(t *testing.T) {
 	form := NewForm("Submit",
 		FormItem{Label: "Name", Field: NewTextField("name"), Required: true},
 	)
-	form.OnSubmit(func() tui.Cmd { return nil })
+	form.OnSubmit(func() tea.Cmd { return nil })
 
 	formFocusSubmit(form)
 	formPressEnter(form)
@@ -242,7 +242,7 @@ func TestForm_ValidationNonRequiredDoesNotBlock(t *testing.T) {
 		FormItem{Label: "Required", Field: NewTextField("req"), Required: true},
 	)
 	submitted := false
-	form.OnSubmit(func() tui.Cmd {
+	form.OnSubmit(func() tea.Cmd {
 		submitted = true
 		return nil
 	})
@@ -261,7 +261,7 @@ func TestForm_ValidationOnClickSubmit(t *testing.T) {
 		FormItem{Label: "Name", Field: NewTextField("name"), Required: true},
 	)
 	submitted := false
-	form.OnSubmit(func() tui.Cmd {
+	form.OnSubmit(func() tea.Cmd {
 		submitted = true
 		return nil
 	})
@@ -278,7 +278,7 @@ func TestForm_ValidationFocusesFirstError(t *testing.T) {
 		FormItem{Label: "Second", Field: NewTextField("second"), Required: true},
 		FormItem{Label: "Third", Field: NewTextField("third"), Required: true},
 	)
-	form.OnSubmit(func() tui.Cmd { return nil })
+	form.OnSubmit(func() tea.Cmd { return nil })
 
 	formFocusSubmit(form)
 	formPressEnter(form)
@@ -289,29 +289,29 @@ func TestForm_ValidationFocusesFirstError(t *testing.T) {
 
 // Helpers
 
-func keyMsg(keyType tui.KeyType, r rune) tui.KeyMsg {
-	return tui.KeyMsg{Key: tui.Key{Type: keyType, Rune: r}}
+func keyPressMsg(s string) tea.KeyPressMsg {
+	return tea.KeyPressMsg(tea.Key{Text: s})
 }
 
-func runeMsg(r rune) tui.KeyMsg {
-	return tui.KeyMsg{Key: tui.Key{Type: tui.KeyRune, Rune: r}}
+func runeKeyMsg(r rune) tea.KeyPressMsg {
+	return tea.KeyPressMsg(tea.Key{Text: string(r), Code: r})
 }
 
 func formPressTab(form *Form) {
-	form.Update(keyMsg(tui.KeyTab, 0))
+	form.Update(keyPressMsg("tab"))
 }
 
 func formPressShiftTab(form *Form) {
-	form.Update(keyMsg(tui.KeyShiftTab, 0))
+	form.Update(keyPressMsg("shift+tab"))
 }
 
 func formPressEnter(form *Form) {
-	form.Update(keyMsg(tui.KeyEnter, 0))
+	form.Update(keyPressMsg("enter"))
 }
 
 func formTypeText(form *Form, text string) {
 	for _, r := range text {
-		form.Update(runeMsg(r))
+		form.Update(runeKeyMsg(r))
 	}
 }
 
@@ -322,5 +322,5 @@ func formFocusSubmit(form *Form) {
 }
 
 func formClickSubmit(form *Form) {
-	form.Update(tui.MouseMsg{Type: tui.MousePress, Button: tui.MouseLeft, Target: "submit"})
+	form.Update(MouseEvent{IsClick: true, Target: "submit"})
 }

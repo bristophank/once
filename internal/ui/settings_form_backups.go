@@ -3,7 +3,7 @@ package ui
 import (
 	"context"
 
-	"github.com/basecamp/gliff/tui"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/basecamp/once/internal/docker"
 )
@@ -36,18 +36,18 @@ func NewSettingsFormBackups(app *docker.Application, lastResult *docker.Operatio
 		lastResult: lastResult,
 	}
 
-	m.form.SetActionButton("Run backup now", func() tui.Msg {
+	m.form.SetActionButton("Run backup now", func() tea.Msg {
 		return settingsRunActionMsg{action: func() (string, error) {
 			return "Backup complete", runBackup(app, pathField.Value())
 		}}
 	})
-	m.form.OnSubmit(func() tui.Cmd {
+	m.form.OnSubmit(func() tea.Cmd {
 		m.settings.Backup.Path = m.form.TextField(backupsPathField).Value()
 		m.settings.Backup.AutoBack = m.form.CheckboxField(backupsAutoBackField).Checked()
-		return func() tui.Msg { return SettingsSectionSubmitMsg{Settings: m.settings} }
+		return func() tea.Msg { return SettingsSectionSubmitMsg{Settings: m.settings} }
 	})
-	m.form.OnCancel(func() tui.Cmd {
-		return func() tui.Msg { return SettingsSectionCancelMsg{} }
+	m.form.OnCancel(func() tea.Cmd {
+		return func() tea.Msg { return SettingsSectionCancelMsg{} }
 	})
 
 	return m
@@ -57,16 +57,16 @@ func (m *SettingsFormBackups) Title() string {
 	return "Backups"
 }
 
-func (m *SettingsFormBackups) Init() tui.Cmd {
+func (m *SettingsFormBackups) Init() tea.Cmd {
 	return m.form.Init()
 }
 
-func (m *SettingsFormBackups) Update(msg tui.Msg) tui.Cmd {
+func (m *SettingsFormBackups) Update(msg tea.Msg) tea.Cmd {
 	return m.form.Update(msg)
 }
 
-func (m *SettingsFormBackups) Render() string {
-	return m.form.Render()
+func (m *SettingsFormBackups) View() string {
+	return m.form.View()
 }
 
 func (m *SettingsFormBackups) StatusLine() string {

@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/basecamp/gliff/tui"
+	tea "charm.land/bubbletea/v2"
 )
 
 const (
@@ -46,13 +46,13 @@ func NewStarfield() *Starfield {
 	}
 }
 
-func (s *Starfield) Init() tui.Cmd {
+func (s *Starfield) Init() tea.Cmd {
 	return s.scheduleTick()
 }
 
-func (s *Starfield) Update(msg tui.Msg) tui.Cmd {
+func (s *Starfield) Update(msg tea.Msg) tea.Cmd {
 	switch msg := msg.(type) {
-	case tui.WindowSizeMsg:
+	case tea.WindowSizeMsg:
 		s.resize(msg.Width, msg.Height)
 	case starfieldTickMsg:
 		s.step()
@@ -197,8 +197,8 @@ func (s *Starfield) randomStar() star {
 	}
 }
 
-func (s *Starfield) scheduleTick() tui.Cmd {
-	return tui.After(starTick, func() tui.Msg {
+func (s *Starfield) scheduleTick() tea.Cmd {
+	return tea.Tick(starTick, func(time.Time) tea.Msg {
 		return starfieldTickMsg{}
 	})
 }

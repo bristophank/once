@@ -6,18 +6,18 @@ import (
 	"strings"
 	"time"
 
+	"charm.land/bubbles/v2/key"
+	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
-	"github.com/basecamp/gliff/components"
-	"github.com/basecamp/gliff/tui"
-
 	"github.com/basecamp/once/internal/docker"
+	"github.com/basecamp/once/internal/mouse"
 )
 
 type SettingsSection interface {
-	Init() tui.Cmd
-	Update(tui.Msg) tui.Cmd
-	Render() string
+	Init() tea.Cmd
+	Update(tea.Msg) tea.Cmd
+	View() string
 	Title() string
 	StatusLine() string
 }
@@ -29,9 +29,9 @@ type SettingsSectionSubmitMsg struct {
 type SettingsSectionCancelMsg struct{}
 
 var settingsKeys = struct {
-	Back KeyBinding
+	Back key.Binding
 }{
-	Back: NewKeyBinding(Key(tui.KeyEscape)).WithHelp("esc", "back"),
+	Back: WithHelp(NewKeyBinding("esc"), "esc", "back"),
 }
 
 type settingsState int
@@ -51,7 +51,7 @@ type Settings struct {
 	state                settingsState
 	section              SettingsSection
 	sectionType          SettingsSectionType
-	progress             *components.ProgressBusy
+	progress             *ProgressBusy
 	err                  error
 	actionSuccessMessage string
 }
@@ -99,18 +99,18 @@ func NewSettings(ns *docker.Namespace, app *docker.Application, sectionType Sett
 	}
 }
 
-func (m *Settings) Init() tui.Cmd {
+func (m *Settings) Init() tea.Cmd {
 	return m.section.Init()
 }
 
-func (m *Settings) Update(msg tui.Msg) tui.Cmd {
-	var cmds []tui.Cmd
+func (m *Settings) Update(msg tea.Msg) tea.Cmd {
+	var cmds []tea.Cmd
 
 	switch msg := msg.(type) {
-	case tui.WindowSizeMsg:
+	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
 		m.help.SetWidth(m.width)
-		m.progress = components.NewProgressBusy(m.width, Colors.Border)
+		m.progress = NewProgressBusy(m.width, Colors.Border)
 		if m.state == settingsStateForm {
 			m.section.Update(msg)
 		}
@@ -118,10 +118,10 @@ func (m *Settings) Update(msg tui.Msg) tui.Cmd {
 			cmds = append(cmds, m.progress.Init())
 		}
 
-	case tui.MouseMsg:
+	case MouseEvent:
 		if m.state == settingsStateActionComplete {
-			if msg.Type == tui.MousePress && msg.Button == tui.MouseLeft && msg.Target == "done" {
-				return func() tui.Msg { return navigateToDashboardMsg{appName: m.app.Settings.Name} }
+			if msg.IsClick && msg.Target == "done" {
+				return func() tea.Msg { return navigateToDashboardMsg{appName: m.app.Settings.Name} }
 			}
 			return nil
 		}
@@ -131,10 +131,10 @@ func (m *Settings) Update(msg tui.Msg) tui.Cmd {
 			}
 		}
 
-	case tui.KeyMsg:
+	case tea.KeyPressMsg:
 		if m.state == settingsStateActionComplete {
-			if msg.Type == tui.KeyEnter {
-				return func() tui.Msg { return navigateToDashboardMsg{appName: m.app.Settings.Name} }
+			if key.Matches(msg, NewKeyBinding("enter")) {
+				return func() tea.Msg { return navigateToDashboardMsg{appName: m.app.Settings.Name} }
 			}
 			return nil
 		}
@@ -142,33 +142,33 @@ func (m *Settings) Update(msg tui.Msg) tui.Cmd {
 			if m.err != nil {
 				m.err = nil
 			}
-			if settingsKeys.Back.Matches(msg) {
-				return func() tui.Msg { return navigateToDashboardMsg{appName: m.app.Settings.Name} }
+			if key.Matches(msg, settingsKeys.Back) {
+				return func() tea.Msg { return navigateToDashboardMsg{appName: m.app.Settings.Name} }
 			}
 		}
 
 	case SettingsSectionCancelMsg:
-		return func() tui.Msg { return navigateToDashboardMsg{appName: m.app.Settings.Name} }
+		return func() tea.Msg { return navigateToDashboardMsg{appName: m.app.Settings.Name} }
 
 	case SettingsSectionSubmitMsg:
 		if msg.Settings.Equal(m.app.Settings) {
-			return func() tui.Msg { return navigateToDashboardMsg{appName: m.app.Settings.Name} }
+			return func() tea.Msg { return navigateToDashboardMsg{appName: m.app.Settings.Name} }
 		}
 		m.state = settingsStateDeploying
 		m.app.Settings = msg.Settings
-		m.progress = components.NewProgressBusy(m.width, Colors.Border)
-		return tui.Batch(m.progress.Init(), m.runDeploy())
+		m.progress = NewProgressBusy(m.width, Colors.Border)
+		return tea.Batch(m.progress.Init(), m.runDeploy())
 
 	case settingsRunActionMsg:
 		m.state = settingsStateRunningAction
-		m.progress = components.NewProgressBusy(m.width, Colors.Border)
-		return tui.Batch(m.progress.Init(), func() tui.Msg {
+		m.progress = NewProgressBusy(m.width, Colors.Border)
+		return tea.Batch(m.progress.Init(), func() tea.Msg {
 			message, err := msg.action()
 			return settingsActionFinishedMsg{err: err, message: message}
 		})
 
 	case settingsDeployFinishedMsg:
-		return func() tui.Msg { return navigateToAppMsg{app: m.app} }
+		return func() tea.Msg { return navigateToAppMsg{app: m.app} }
 
 	case settingsActionFinishedMsg:
 		if msg.err != nil {
@@ -181,9 +181,9 @@ func (m *Settings) Update(msg tui.Msg) tui.Cmd {
 			m.state = settingsStateActionComplete
 			return nil
 		}
-		return func() tui.Msg { return navigateToAppMsg{app: m.app} }
+		return func() tea.Msg { return navigateToAppMsg{app: m.app} }
 
-	case components.ProgressBusyTickMsg:
+	case ProgressBusyTickMsg:
 		if m.state == settingsStateDeploying || m.state == settingsStateRunningAction {
 			if m.progress != nil {
 				cmds = append(cmds, m.progress.Update(msg))
@@ -196,10 +196,10 @@ func (m *Settings) Update(msg tui.Msg) tui.Cmd {
 		cmds = append(cmds, cmd)
 	}
 
-	return tui.Batch(cmds...)
+	return tea.Batch(cmds...)
 }
 
-func (m *Settings) Render() string {
+func (m *Settings) View() string {
 	titleLine := Styles.TitleRule(m.width, m.app.Settings.Host, strings.ToLower(m.section.Title()))
 
 	var contentView string
@@ -211,18 +211,18 @@ func (m *Settings) Render() string {
 		} else if line := m.section.StatusLine(); line != "" {
 			statusLine = lipgloss.NewStyle().Foreground(Colors.Muted).Render(line)
 		}
-		contentView = lipgloss.JoinVertical(lipgloss.Center, statusLine, "", m.section.Render())
+		contentView = lipgloss.JoinVertical(lipgloss.Center, statusLine, "", m.section.View())
 	case settingsStateActionComplete:
 		contentView = m.renderActionComplete()
 	default:
 		if m.progress != nil {
-			contentView = m.progress.Render()
+			contentView = m.progress.View()
 		}
 	}
 
 	var helpLine string
 	if m.state == settingsStateForm {
-		helpView := m.help.Render([]KeyBinding{settingsKeys.Back})
+		helpView := m.help.View([]key.Binding{settingsKeys.Back})
 		helpLine = Styles.HelpLine(m.width, helpView)
 	}
 
@@ -247,7 +247,7 @@ func (m *Settings) renderActionComplete() string {
 	statusLine := Styles.CenteredLine(m.width, m.actionSuccessMessage)
 
 	buttonStyle := Styles.Button.BorderForeground(Colors.Focused)
-	button := tui.WithTarget("done", buttonStyle.Render("Done"))
+	button := mouse.Mark("done", buttonStyle.Render("Done"))
 	buttonView := lipgloss.NewStyle().
 		Width(m.width).
 		Align(lipgloss.Center).
@@ -257,8 +257,8 @@ func (m *Settings) renderActionComplete() string {
 	return lipgloss.JoinVertical(lipgloss.Left, statusLine, buttonView)
 }
 
-func (m *Settings) runDeploy() tui.Cmd {
-	return func() tui.Msg {
+func (m *Settings) runDeploy() tea.Cmd {
+	return func() tea.Msg {
 		err := m.app.Deploy(context.Background(), nil)
 		return settingsDeployFinishedMsg{err: err}
 	}

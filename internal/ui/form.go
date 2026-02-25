@@ -4,16 +4,18 @@ import (
 	"strconv"
 	"strings"
 
+	"charm.land/bubbles/v2/key"
+	"charm.land/bubbles/v2/textinput"
+	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
-	"github.com/basecamp/gliff/components"
-	"github.com/basecamp/gliff/tui"
+	"github.com/basecamp/once/internal/mouse"
 )
 
 type FormField interface {
-	Update(tui.Msg) tui.Cmd
-	Render() string
-	Focus() tui.Cmd
+	Update(tea.Msg) tea.Cmd
+	View() string
+	Focus() tea.Cmd
 	Blur()
 	SetWidth(int)
 	IsFocusable() bool
@@ -26,14 +28,14 @@ type valuer interface {
 // TextField
 
 type TextField struct {
-	input      *components.TextField
+	input      textinput.Model
 	digitsOnly bool
 }
 
 func NewTextField(placeholder string) *TextField {
-	input := components.NewTextField()
-	input.SetPlaceholder(placeholder)
-	input.SetCharLimit(256)
+	input := textinput.New()
+	input.Placeholder = placeholder
+	input.CharLimit = 256
 	return &TextField{input: input}
 }
 
@@ -46,11 +48,11 @@ func (f *TextField) SetValue(v string) {
 }
 
 func (f *TextField) SetPlaceholder(p string) {
-	f.input.SetPlaceholder(p)
+	f.input.Placeholder = p
 }
 
 func (f *TextField) SetCharLimit(n int) {
-	f.input.SetCharLimit(n)
+	f.input.CharLimit = n
 }
 
 func (f *TextField) SetDigitsOnly(v bool) {
@@ -58,26 +60,32 @@ func (f *TextField) SetDigitsOnly(v bool) {
 }
 
 func (f *TextField) SetEchoPassword() {
-	f.input.SetEchoMode(components.EchoPassword)
+	f.input.EchoMode = textinput.EchoPassword
 }
 
-func (f *TextField) Update(msg tui.Msg) tui.Cmd {
+func (f *TextField) Update(msg tea.Msg) tea.Cmd {
 	if f.digitsOnly {
-		if msg, ok := msg.(tui.KeyMsg); ok && msg.Type == tui.KeyRune {
-			if msg.Rune < '0' || msg.Rune > '9' {
-				return nil
+		if msg, ok := msg.(tea.KeyPressMsg); ok {
+			k := msg.Key()
+			if k.Text != "" {
+				r := []rune(k.Text)[0]
+				if r < '0' || r > '9' {
+					return nil
+				}
 			}
 		}
 	}
 
-	return f.input.Update(msg)
+	var cmd tea.Cmd
+	f.input, cmd = f.input.Update(msg)
+	return cmd
 }
 
-func (f *TextField) Render() string {
-	return f.input.Render()
+func (f *TextField) View() string {
+	return f.input.View()
 }
 
-func (f *TextField) Focus() tui.Cmd {
+func (f *TextField) Focus() tea.Cmd {
 	return f.input.Focus()
 }
 
@@ -120,16 +128,16 @@ func (f *CheckboxField) Toggle() {
 	f.checked = !f.checked
 }
 
-func (f *CheckboxField) Update(msg tui.Msg) tui.Cmd {
-	if msg, ok := msg.(tui.KeyMsg); ok {
-		if msg.Type == tui.KeyRune && msg.Rune == ' ' {
+func (f *CheckboxField) Update(msg tea.Msg) tea.Cmd {
+	if msg, ok := msg.(tea.KeyPressMsg); ok {
+		if msg.String() == "space" || msg.String() == " " {
 			f.Toggle()
 		}
 	}
 	return nil
 }
 
-func (f *CheckboxField) Render() string {
+func (f *CheckboxField) View() string {
 	if f.disabledFn != nil {
 		if disabled, text := f.disabledFn(); disabled {
 			return text
@@ -142,7 +150,7 @@ func (f *CheckboxField) Render() string {
 	return "[ ] " + f.label
 }
 
-func (f *CheckboxField) Focus() tui.Cmd    { return nil }
+func (f *CheckboxField) Focus() tea.Cmd    { return nil }
 func (f *CheckboxField) Blur()             {}
 func (f *CheckboxField) SetWidth(int)      {}
 func (f *CheckboxField) IsFocusable() bool { return true }
@@ -166,9 +174,9 @@ func (f *StaticField) SetValue(v string) {
 	f.value = v
 }
 
-func (f *StaticField) Update(tui.Msg) tui.Cmd { return nil }
-func (f *StaticField) Render() string         { return f.styleFn(f.value) }
-func (f *StaticField) Focus() tui.Cmd         { return nil }
+func (f *StaticField) Update(tea.Msg) tea.Cmd { return nil }
+func (f *StaticField) View() string           { return f.styleFn(f.value) }
+func (f *StaticField) Focus() tea.Cmd         { return nil }
 func (f *StaticField) Blur()                  {}
 func (f *StaticField) SetWidth(int)           {}
 func (f *StaticField) IsFocusable() bool      { return false }
@@ -177,7 +185,7 @@ func (f *StaticField) IsFocusable() bool      { return false }
 
 type FormActionButton struct {
 	Label   string
-	OnPress func() tui.Msg
+	OnPress func() tea.Msg
 }
 
 // Form
@@ -188,6 +196,10 @@ type FormItem struct {
 	Required bool
 }
 
+type FormSubmitMsg struct{}
+type FormCancelMsg struct{}
+type FormActionMsg struct{ Msg tea.Msg }
+
 type Form struct {
 	items        []FormItem
 	submitLabel  string
@@ -196,8 +208,8 @@ type Form struct {
 	width        int
 	errorField   int
 	error        string
-	onSubmit     func() tui.Cmd
-	onCancel     func() tui.Cmd
+	onSubmit     func() tea.Cmd
+	onCancel     func() tea.Cmd
 }
 
 func NewForm(submitLabel string, items ...FormItem) *Form {
@@ -217,40 +229,40 @@ func NewForm(submitLabel string, items ...FormItem) *Form {
 	return f
 }
 
-func (f *Form) Init() tui.Cmd {
+func (f *Form) Init() tea.Cmd {
 	if f.focused < len(f.items) {
 		return f.items[f.focused].Field.Focus()
 	}
 	return nil
 }
 
-func (f *Form) Update(msg tui.Msg) tui.Cmd {
+func (f *Form) Update(msg tea.Msg) tea.Cmd {
 	switch msg := msg.(type) {
-	case tui.WindowSizeMsg:
+	case tea.WindowSizeMsg:
 		f.width = msg.Width
 		inputWidth := min(f.width-4, 60)
 		for _, item := range f.items {
 			item.Field.SetWidth(inputWidth)
 		}
 
-	case tui.MouseMsg:
-		if msg.Type == tui.MousePress && msg.Button == tui.MouseLeft {
+	case MouseEvent:
+		if msg.IsClick {
 			return f.handleClick(msg.Target)
 		}
 
-	case tui.KeyMsg:
-		switch msg.Type {
-		case tui.KeyTab:
+	case tea.KeyPressMsg:
+		switch {
+		case key.Matches(msg, key.NewBinding(key.WithKeys("tab"))):
 			return f.focusNext()
-		case tui.KeyShiftTab:
+		case key.Matches(msg, key.NewBinding(key.WithKeys("shift+tab"))):
 			return f.focusPrev()
-		case tui.KeyEnter:
+		case key.Matches(msg, key.NewBinding(key.WithKeys("enter"))):
 			return f.handleEnter()
 		}
 	}
 
 	if f.focused < len(f.items) {
-		if _, isKey := msg.(tui.KeyMsg); isKey {
+		if _, isKey := msg.(tea.KeyPressMsg); isKey {
 			f.clearErrorOnInput()
 		}
 		return f.items[f.focused].Field.Update(msg)
@@ -259,21 +271,21 @@ func (f *Form) Update(msg tui.Msg) tui.Cmd {
 	return nil
 }
 
-func (f *Form) Render() string {
+func (f *Form) View() string {
 	var parts []string
 
 	errorStyle := lipgloss.NewStyle().Foreground(Colors.Error)
 
 	for i, item := range f.items {
 		if _, isStatic := item.Field.(*StaticField); isStatic {
-			parts = append(parts, item.Field.Render())
+			parts = append(parts, item.Field.View())
 			continue
 		}
 		label := Styles.Label.Render(item.Label)
 
 		hasError := f.error != "" && i == f.errorField
 		inputStyle := Styles.WithError(Styles.Focus(Styles.Input, f.focused == i), hasError)
-		field := tui.WithTarget(fieldTarget(i), inputStyle.Render(item.Field.Render()))
+		field := mouse.Mark(fieldTarget(i), inputStyle.Render(item.Field.View()))
 
 		if hasError {
 			parts = append(parts, label, field, errorStyle.Render(f.error), "")
@@ -282,18 +294,18 @@ func (f *Form) Render() string {
 		}
 	}
 
-	submitButton := tui.WithTarget("submit", Styles.Focus(Styles.ButtonPrimary, f.focused == f.submitIndex()).
+	submitButton := mouse.Mark("submit", Styles.Focus(Styles.ButtonPrimary, f.focused == f.submitIndex()).
 		Render(f.submitLabel))
 
 	buttonParts := []string{submitButton}
 
 	if f.actionButton != nil {
-		actionBtn := tui.WithTarget("action", Styles.Focus(Styles.Button, f.focused == f.actionIndex()).
+		actionBtn := mouse.Mark("action", Styles.Focus(Styles.Button, f.focused == f.actionIndex()).
 			Render(f.actionButton.Label))
 		buttonParts = append(buttonParts, actionBtn)
 	}
 
-	cancelButton := tui.WithTarget("cancel", Styles.Focus(Styles.Button, f.focused == f.cancelIndex()).
+	cancelButton := mouse.Mark("cancel", Styles.Focus(Styles.Button, f.focused == f.cancelIndex()).
 		Render("Cancel"))
 
 	buttonParts = append(buttonParts, cancelButton)
@@ -303,15 +315,15 @@ func (f *Form) Render() string {
 	return lipgloss.JoinVertical(lipgloss.Left, parts...)
 }
 
-func (f *Form) SetActionButton(label string, onPress func() tui.Msg) {
+func (f *Form) SetActionButton(label string, onPress func() tea.Msg) {
 	f.actionButton = &FormActionButton{Label: label, OnPress: onPress}
 }
 
-func (f *Form) OnSubmit(fn func() tui.Cmd) {
+func (f *Form) OnSubmit(fn func() tea.Cmd) {
 	f.onSubmit = fn
 }
 
-func (f *Form) OnCancel(fn func() tui.Cmd) {
+func (f *Form) OnCancel(fn func() tea.Cmd) {
 	f.onCancel = fn
 }
 
@@ -341,13 +353,13 @@ func (f *Form) Error() string {
 
 // Private
 
-func (f *Form) focusNext() tui.Cmd {
+func (f *Form) focusNext() tea.Cmd {
 	f.blurCurrent()
 	f.focused = (f.focused + 1) % f.totalCount()
 	return f.focusToNextFocusable()
 }
 
-func (f *Form) focusPrev() tui.Cmd {
+func (f *Form) focusPrev() tea.Cmd {
 	f.blurCurrent()
 	f.focused = (f.focused - 1 + f.totalCount()) % f.totalCount()
 	return f.focusToNextFocusable()
@@ -359,14 +371,14 @@ func (f *Form) blurCurrent() {
 	}
 }
 
-func (f *Form) focusCurrent() tui.Cmd {
+func (f *Form) focusCurrent() tea.Cmd {
 	if f.focused < len(f.items) {
 		return f.items[f.focused].Field.Focus()
 	}
 	return nil
 }
 
-func (f *Form) focusToNextFocusable() tui.Cmd {
+func (f *Form) focusToNextFocusable() tea.Cmd {
 	start := f.focused
 	for {
 		if f.focused < len(f.items) {
@@ -384,12 +396,12 @@ func (f *Form) focusToNextFocusable() tui.Cmd {
 	}
 }
 
-func (f *Form) handleEnter() tui.Cmd {
+func (f *Form) handleEnter() tea.Cmd {
 	switch {
 	case f.focused < len(f.items):
 		return f.focusNext()
 	case f.actionButton != nil && f.focused == f.actionIndex():
-		return func() tui.Msg { return f.actionButton.OnPress() }
+		return func() tea.Msg { return f.actionButton.OnPress() }
 	case f.focused == f.submitIndex():
 		return f.submitIfValid()
 	case f.focused == f.cancelIndex():
@@ -401,7 +413,7 @@ func (f *Form) handleEnter() tui.Cmd {
 	return nil
 }
 
-func (f *Form) handleClick(target string) tui.Cmd {
+func (f *Form) handleClick(target string) tea.Cmd {
 	if target == "" {
 		return nil
 	}
@@ -424,7 +436,7 @@ func (f *Form) handleClick(target string) tui.Cmd {
 		if f.actionButton != nil {
 			f.blurCurrent()
 			f.focused = f.actionIndex()
-			return func() tui.Msg { return f.actionButton.OnPress() }
+			return func() tea.Msg { return f.actionButton.OnPress() }
 		}
 	case "cancel":
 		f.blurCurrent()
@@ -443,7 +455,7 @@ func (f *Form) clearErrorOnInput() {
 	}
 }
 
-func (f *Form) submitIfValid() tui.Cmd {
+func (f *Form) submitIfValid() tea.Cmd {
 	if !f.validate() {
 		return f.focusIndex(f.errorField)
 	}
@@ -472,7 +484,7 @@ func (f *Form) validate() bool {
 	return true
 }
 
-func (f *Form) focusIndex(i int) tui.Cmd {
+func (f *Form) focusIndex(i int) tea.Cmd {
 	if i == f.focused {
 		return nil
 	}
