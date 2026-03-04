@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"regexp"
 	"slices"
 	"strings"
 	"time"
@@ -19,6 +20,8 @@ import (
 
 const DefaultNamespace = "once"
 
+var ErrInvalidNamespace = errors.New("invalid namespace: must contain only lowercase letters, digits, and hyphens, and must not start with a hyphen")
+
 type Namespace struct {
 	name         string
 	client       *client.Client
@@ -29,6 +32,10 @@ type Namespace struct {
 func NewNamespace(name string) (*Namespace, error) {
 	if name == "" {
 		name = DefaultNamespace
+	}
+
+	if !validNamespace.MatchString(name) {
+		return nil, fmt.Errorf("%w: %q", ErrInvalidNamespace, name)
 	}
 
 	c, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
@@ -390,6 +397,8 @@ func (n *Namespace) parseBackup(r io.Reader) (ApplicationSettings, ApplicationVo
 }
 
 // Helpers
+
+var validNamespace = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
 
 // cutLast splits s around the last occurrence of sep, like strings.Cut but
 // from the right.
