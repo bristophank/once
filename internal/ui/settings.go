@@ -127,7 +127,7 @@ func (m Settings) Update(msg tea.Msg) (Component, tea.Cmd) {
 	case MouseEvent:
 		if m.state == settingsStateActionComplete {
 			if msg.IsClick && msg.Target == "done" {
-				return m, func() tea.Msg { return NavigateToDashboardMsg{AppName: m.app.Settings.Name} }
+				return m, m.navigateToDashboard()
 			}
 			return m, nil
 		}
@@ -142,7 +142,7 @@ func (m Settings) Update(msg tea.Msg) (Component, tea.Cmd) {
 	case tea.KeyPressMsg:
 		if m.state == settingsStateActionComplete {
 			if key.Matches(msg, NewKeyBinding("enter")) {
-				return m, func() tea.Msg { return NavigateToDashboardMsg{AppName: m.app.Settings.Name} }
+				return m, m.navigateToDashboard()
 			}
 			return m, nil
 		}
@@ -151,25 +151,15 @@ func (m Settings) Update(msg tea.Msg) (Component, tea.Cmd) {
 				m.err = nil
 			}
 			if key.Matches(msg, settingsKeys.Back) {
-				return m, func() tea.Msg { return NavigateToDashboardMsg{AppName: m.app.Settings.Name} }
+				return m, m.navigateToDashboard()
 			}
 		}
 
 	case SettingsSectionCancelMsg:
-		return m, func() tea.Msg { return NavigateToDashboardMsg{AppName: m.app.Settings.Name} }
+		return m, m.navigateToDashboard()
 
 	case SettingsSectionSubmitMsg:
-		if msg.Settings.Equal(m.app.Settings) {
-			return m, func() tea.Msg { return NavigateToDashboardMsg{AppName: m.app.Settings.Name} }
-		}
-		if m.namespace.HostInUseByAnother(msg.Settings.Host, m.app.Settings.Name) {
-			m.err = docker.ErrHostnameInUse
-			return m, nil
-		}
-		m.state = settingsStateDeploying
-		m.app.Settings = msg.Settings
-		m.progress = NewProgressBusy(m.width, Colors.Border)
-		return m, tea.Batch(m.progress.Init(), m.runDeploy())
+		return m.handleFormSubmit(msg)
 
 	case settingsRunActionMsg:
 		m.state = settingsStateRunningAction
@@ -183,17 +173,7 @@ func (m Settings) Update(msg tea.Msg) (Component, tea.Cmd) {
 		return m, func() tea.Msg { return NavigateToAppMsg{App: m.app} }
 
 	case settingsActionFinishedMsg:
-		if msg.err != nil {
-			m.state = settingsStateForm
-			m.err = msg.err
-			return m, nil
-		}
-		if msg.message != "" {
-			m.actionSuccessMessage = msg.message
-			m.state = settingsStateActionComplete
-			return m, nil
-		}
-		return m, func() tea.Msg { return NavigateToAppMsg{App: m.app} }
+		return m.handleActionResult(msg)
 
 	case ProgressBusyTickMsg:
 		if m.state == settingsStateDeploying || m.state == settingsStateRunningAction {
@@ -252,6 +232,38 @@ func (m Settings) View() string {
 }
 
 // Private
+
+func (m Settings) navigateToDashboard() tea.Cmd {
+	return func() tea.Msg { return NavigateToDashboardMsg{AppName: m.app.Settings.Name} }
+}
+
+func (m Settings) handleFormSubmit(msg SettingsSectionSubmitMsg) (Component, tea.Cmd) {
+	if msg.Settings.Equal(m.app.Settings) {
+		return m, m.navigateToDashboard()
+	}
+	if m.namespace.HostInUseByAnother(msg.Settings.Host, m.app.Settings.Name) {
+		m.err = docker.ErrHostnameInUse
+		return m, nil
+	}
+	m.state = settingsStateDeploying
+	m.app.Settings = msg.Settings
+	m.progress = NewProgressBusy(m.width, Colors.Border)
+	return m, tea.Batch(m.progress.Init(), m.runDeploy())
+}
+
+func (m Settings) handleActionResult(msg settingsActionFinishedMsg) (Component, tea.Cmd) {
+	if msg.err != nil {
+		m.state = settingsStateForm
+		m.err = msg.err
+		return m, nil
+	}
+	if msg.message != "" {
+		m.actionSuccessMessage = msg.message
+		m.state = settingsStateActionComplete
+		return m, nil
+	}
+	return m, func() tea.Msg { return NavigateToAppMsg{App: m.app} }
+}
 
 func (m Settings) renderActionComplete() string {
 	statusLine := Styles.CenteredLine(m.width, m.actionSuccessMessage)

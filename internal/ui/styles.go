@@ -161,6 +161,60 @@ func WithBackground(bg color.Color, content string) string {
 	return strings.Join(lines, "\n")
 }
 
+// Box drawing helpers for bordered panels used across chart, metric card,
+// visits card, and disk gauge components.
+
+var borderStyle = lipgloss.NewStyle().Foreground(Colors.Border)
+
+func boxTop(title string, innerWidth int) string {
+	titleLen := lipgloss.Width(title)
+	fill := max(innerWidth-1-titleLen, 0) // 1 for dash before title
+	return borderStyle.Render("╭─" + title + strings.Repeat("─", fill) + "╮")
+}
+
+func boxBottom(innerWidth int) string {
+	return borderStyle.Render("╰" + strings.Repeat("─", innerWidth) + "╯")
+}
+
+func boxSide() string {
+	return borderStyle.Render("│")
+}
+
+// distributeWidths divides total evenly among count items, distributing any
+// remainder one pixel at a time to the first items.
+func distributeWidths(total, count int) []int {
+	if count <= 0 {
+		return nil
+	}
+	base := total / count
+	rem := total % count
+	widths := make([]int, count)
+	for i := range widths {
+		widths[i] = base
+		if i < rem {
+			widths[i]++
+		}
+	}
+	return widths
+}
+
+func padOrTruncate(s string, width int) string {
+	w := lipgloss.Width(s)
+	if w >= width {
+		return s[:width]
+	}
+	return s + strings.Repeat(" ", width-w)
+}
+
+func formatValueLine(valueStr, limitLabel string, inner int) string {
+	if limitLabel != "" {
+		limitStr := lipgloss.NewStyle().Foreground(Colors.Border).Render("·" + limitLabel)
+		gap := max(inner-lipgloss.Width(valueStr)-lipgloss.Width(limitStr)-1, 0)
+		return valueStr + strings.Repeat(" ", gap) + limitStr + " "
+	}
+	return padOrTruncate(valueStr, inner)
+}
+
 // Helpers
 
 func applyBackgroundToLine(line, bgSeq string, p *ansi.Parser) string {

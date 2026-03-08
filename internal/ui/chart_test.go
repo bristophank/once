@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -23,6 +24,34 @@ func TestChartView(t *testing.T) {
 	output := chart.View(data, 40, 6, NewChartScale(UnitCount, 100))
 
 	assert.NotEmpty(t, output)
+}
+
+func TestChartViewContainsBorders(t *testing.T) {
+	data := []float64{50, 75}
+	chart := NewChart("CPU", UnitPercent)
+	output := chart.View(data, 20, 6, NewChartScale(UnitPercent, 100))
+
+	assert.Contains(t, output, "╭─CPU")
+	assert.Contains(t, output, "╰")
+	assert.Contains(t, output, "│")
+}
+
+func TestChartViewLineCount(t *testing.T) {
+	data := []float64{50}
+	chart := NewChart("Test", UnitCount)
+	output := chart.View(data, 20, 8, NewChartScale(UnitCount, 100))
+
+	lines := strings.Split(output, "\n")
+	// top border + chart rows + bottom border = height
+	assert.Equal(t, 8, len(lines))
+}
+
+func TestChartViewEmptyData(t *testing.T) {
+	chart := NewChart("Test", UnitCount)
+	output := chart.View(nil, 20, 6, NewChartScale(UnitCount, 0))
+
+	assert.NotEmpty(t, output)
+	assert.Contains(t, output, "╭─Test")
 }
 
 func TestPeakValue(t *testing.T) {

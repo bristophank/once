@@ -30,6 +30,7 @@ const (
 	DefaultHTTPPort    = 80
 	DefaultHTTPSPort   = 443
 	DefaultMetricsPort = 1318
+	deployTimeout      = "120s"
 )
 
 type ProxySettings struct {
@@ -170,7 +171,13 @@ func (p *Proxy) Remove(ctx context.Context, appName string) error {
 }
 
 func (p *Proxy) Deploy(ctx context.Context, opts DeployOptions) error {
-	args := []string{"kamal-proxy", "deploy", opts.AppName, "--target", opts.Target, "--deploy-timeout", "120s"}
+	return p.Exec(ctx, p.deployArgs(opts))
+}
+
+// Private
+
+func (p *Proxy) deployArgs(opts DeployOptions) []string {
+	args := []string{"kamal-proxy", "deploy", opts.AppName, "--target", opts.Target, "--deploy-timeout", deployTimeout}
 
 	if opts.Host != "" {
 		args = append(args, "--host", opts.Host)
@@ -180,7 +187,7 @@ func (p *Proxy) Deploy(ctx context.Context, opts DeployOptions) error {
 		args = append(args, "--tls")
 	}
 
-	return p.Exec(ctx, args)
+	return args
 }
 
 func (p *Proxy) LoadState(ctx context.Context) (*State, error) {

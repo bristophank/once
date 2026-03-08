@@ -342,60 +342,51 @@ func (m Install) renderMiddleCentered(contentView string, middleHeight int) stri
 	return centered
 }
 
+// overlayBlock holds a pre-measured block of lines to composite over the starfield.
+type overlayBlock struct {
+	lines []string
+	width int
+	top   int
+	left  int
+}
+
+func newOverlayBlock(content string, top, left int) overlayBlock {
+	lines := strings.Split(content, "\n")
+	width := blockWidth(lines)
+	return overlayBlock{lines: lines, width: width, top: top, left: left}
+}
+
+func (b overlayBlock) containsRow(row int) (line string, ok bool) {
+	idx := row - b.top
+	if idx < 0 || idx >= len(b.lines) {
+		return "", false
+	}
+	line = b.lines[idx]
+	if w := ansi.StringWidth(line); w < b.width {
+		line += strings.Repeat(" ", b.width-w)
+	}
+	return line, true
+}
+
 // renderLogoWithStarfield composites the logo (pinned at top) and form (centered)
 // as independent layers over the starfield.
 func (m Install) renderLogoWithStarfield(formView string, middleHeight int) string {
 	m.starfield.ComputeGrid()
 
-	logoView := m.logo.View()
-	logoLines := strings.Split(logoView, "\n")
-	logoWidth := 0
-	for _, line := range logoLines {
-		if w := ansi.StringWidth(line); w > logoWidth {
-			logoWidth = w
-		}
-	}
-	logoTop := 1
-	logoLeft := (m.width - logoWidth) / 2
+	logo := newOverlayBlock(m.logo.View(), 1, 0)
+	logo.left = (m.width - logo.width) / 2
 
 	formLines := strings.Split(formView, "\n")
-	formWidth := 0
-	for _, line := range formLines {
-		if w := ansi.StringWidth(line); w > formWidth {
-			formWidth = w
-		}
-	}
-	formTop := (middleHeight - len(formLines)) / 2
-	formLeft := (m.width - formWidth) / 2
+	form := newOverlayBlock(formView, (middleHeight-len(formLines))/2, 0)
+	form.left = (m.width - form.width) / 2
 
 	var sb strings.Builder
 	for row := range middleHeight {
-		logoRow := row - logoTop
-		formRow := row - formTop
-
-		inLogo := logoRow >= 0 && logoRow < len(logoLines)
-		inForm := formRow >= 0 && formRow < len(formLines)
-
-		switch {
-		case inForm:
-			sb.WriteString(m.starfield.RenderRow(row, 0, formLeft))
-			fgLine := formLines[formRow]
-			if w := ansi.StringWidth(fgLine); w < formWidth {
-				fgLine += strings.Repeat(" ", formWidth-w)
-			}
-			sb.WriteString(fgLine)
-			sb.WriteString(m.starfield.RenderRow(row, formLeft+formWidth, m.width))
-
-		case inLogo:
-			sb.WriteString(m.starfield.RenderRow(row, 0, logoLeft))
-			fgLine := logoLines[logoRow]
-			if w := ansi.StringWidth(fgLine); w < logoWidth {
-				fgLine += strings.Repeat(" ", logoWidth-w)
-			}
-			sb.WriteString(fgLine)
-			sb.WriteString(m.starfield.RenderRow(row, logoLeft+logoWidth, m.width))
-
-		default:
+		if line, ok := form.containsRow(row); ok {
+			m.writeOverlayRow(&sb, row, form.left, form.width, line)
+		} else if line, ok := logo.containsRow(row); ok {
+			m.writeOverlayRow(&sb, row, logo.left, logo.width, line)
+		} else {
 			sb.WriteString(m.starfield.RenderFullRow(row))
 		}
 
@@ -411,30 +402,13 @@ func (m Install) renderMiddleWithStarfield(contentView string, middleHeight int)
 	m.starfield.ComputeGrid()
 
 	fgLines := strings.Split(contentView, "\n")
-	fgHeight := len(fgLines)
-	fgWidth := 0
-	for _, line := range fgLines {
-		if w := ansi.StringWidth(line); w > fgWidth {
-			fgWidth = w
-		}
-	}
-
-	topOffset := (middleHeight - fgHeight) / 2
-	leftOffset := (m.width - fgWidth) / 2
+	fg := newOverlayBlock(contentView, (middleHeight-len(fgLines))/2, 0)
+	fg.left = (m.width - fg.width) / 2
 
 	var sb strings.Builder
 	for row := range middleHeight {
-		fgRow := row - topOffset
-		if fgRow >= 0 && fgRow < fgHeight {
-			sb.WriteString(m.starfield.RenderRow(row, 0, leftOffset))
-
-			fgLine := fgLines[fgRow]
-			if w := ansi.StringWidth(fgLine); w < fgWidth {
-				fgLine += strings.Repeat(" ", fgWidth-w)
-			}
-			sb.WriteString(fgLine)
-
-			sb.WriteString(m.starfield.RenderRow(row, leftOffset+fgWidth, m.width))
+		if line, ok := fg.containsRow(row); ok {
+			m.writeOverlayRow(&sb, row, fg.left, fg.width, line)
 		} else {
 			sb.WriteString(m.starfield.RenderFullRow(row))
 		}
@@ -443,4 +417,20 @@ func (m Install) renderMiddleWithStarfield(contentView string, middleHeight int)
 		}
 	}
 	return sb.String()
+}
+
+func (m Install) writeOverlayRow(sb *strings.Builder, row, left, width int, line string) {
+	sb.WriteString(m.starfield.RenderRow(row, 0, left))
+	sb.WriteString(line)
+	sb.WriteString(m.starfield.RenderRow(row, left+width, m.width))
+}
+
+func blockWidth(lines []string) int {
+	width := 0
+	for _, line := range lines {
+		if w := ansi.StringWidth(line); w > width {
+			width = w
+		}
+	}
+	return width
 }

@@ -103,15 +103,10 @@ func (c MetricCard) Health() HealthState {
 }
 
 func (c MetricCard) View(width int) string {
-	borderStyle := lipgloss.NewStyle().Foreground(Colors.Border)
-	inner := width - 2
+	inner := width - 2 // left + right border
 
-	topFill := max(inner-1-len(c.title), 0)
-	topLine := borderStyle.Render("╭─" + c.title + strings.Repeat("─", topFill) + "╮")
-	bottomLine := borderStyle.Render("╰" + strings.Repeat("─", inner) + "╯")
-
-	left := borderStyle.Render("│")
-	right := borderStyle.Render("│")
+	left := boxSide()
+	right := boxSide()
 
 	var barStr, valueLine, detailLine string
 	if c.isTraffic {
@@ -126,34 +121,31 @@ func (c MetricCard) View(width int) string {
 		left + padOrTruncate(detailLine, inner) + right,
 	}
 
-	return topLine + "\n" + strings.Join(contentLines, "\n") + "\n" + bottomLine
+	return boxTop(c.title, inner) + "\n" + strings.Join(contentLines, "\n") + "\n" + boxBottom(inner)
 }
 
 // Private
 
-func (c MetricCard) metricLines(inner int) (barStr, valueLine, detailLine string) {
-	current := lastValue(c.data)
-	peak := peakValue(c.data, peakWindow)
+func (c MetricCard) renderBarLine(inner int) (barStr string, current, peak float64) {
+	current = lastValue(c.data)
+	peak = peakValue(c.data, peakWindow)
 	scaleMax := c.scale.Max()
 	if scaleMax == 0 {
 		scaleMax = 1
 	}
-
 	barStr = renderBar(current, peak, scaleMax, c.thresholds.Color(c.healthPct), max(inner-2, 0))
+	return
+}
+
+func (c MetricCard) metricLines(inner int) (barStr, valueLine, detailLine string) {
+	barStr, current, peak := c.renderBarLine(inner)
 	valueLine = formatValueLine(" "+c.unit.Format(current), c.limitLabel, inner)
 	detailLine = " peak: " + c.unit.Format(peak)
 	return
 }
 
 func (c MetricCard) trafficLines(inner int) (barStr, valueLine, detailLine string) {
-	currentReq := lastValue(c.data)
-	peakReq := peakValue(c.data, peakWindow)
-	scaleMax := c.scale.Max()
-	if scaleMax == 0 {
-		scaleMax = 1
-	}
-
-	barStr = renderBar(currentReq, peakReq, scaleMax, c.thresholds.Color(c.healthPct), max(inner-2, 0))
+	barStr, currentReq, _ := c.renderBarLine(inner)
 	valueLine = formatValueLine(" "+UnitCount.Format(currentReq)+"/min", c.limitLabel, inner)
 
 	currentErr := lastValue(c.errData)
@@ -171,11 +163,3 @@ func (c MetricCard) trafficLines(inner int) (barStr, valueLine, detailLine strin
 	return
 }
 
-func formatValueLine(valueStr, limitLabel string, inner int) string {
-	if limitLabel != "" {
-		limitStr := lipgloss.NewStyle().Foreground(Colors.Border).Render("·" + limitLabel)
-		gap := max(inner-lipgloss.Width(valueStr)-lipgloss.Width(limitStr)-1, 0)
-		return valueStr + strings.Repeat(" ", gap) + limitStr + " "
-	}
-	return padOrTruncate(valueStr, inner)
-}

@@ -60,6 +60,8 @@ func (u UnitType) Format(value float64) string {
 // Each column has 4 dots, allowing 2 data points per character.
 // Left column dots (bottom to top): 7, 3, 2, 1
 // Right column dots (bottom to top): 8, 6, 5, 4
+const brailleBase rune = 0x2800
+
 var (
 	leftDots  = [4]rune{0x40, 0x04, 0x02, 0x01} // dots 7, 3, 2, 1
 	rightDots = [4]rune{0x80, 0x20, 0x10, 0x08} // dots 8, 6, 5, 4
@@ -84,8 +86,6 @@ func (c Chart) View(data []float64, width, height int, scale ChartScale) string 
 	if width <= 0 || height <= 2 {
 		return ""
 	}
-
-	borderStyle := lipgloss.NewStyle().Foreground(Colors.Border)
 
 	chartRows := max(height-2, 1) // minus top and bottom border
 	innerWidth := width - 2       // minus left and right border chars
@@ -125,19 +125,14 @@ func (c Chart) View(data []float64, width, height int, scale ChartScale) string 
 	}
 
 	var lines []string
-
-	// Top border with embedded title: ╭─Title─────╮
-	titleLen := lipgloss.Width(c.title)
-	topFill := max(innerWidth-1-titleLen, 0) // 1 for dash before title
-	topLine := "╭─" + c.title + strings.Repeat("─", topFill) + "╮"
-	lines = append(lines, borderStyle.Render(topLine))
+	lines = append(lines, boxTop(c.title, innerWidth))
 
 	// Build the chart row by row, from top to bottom
 	dataOffset := max(0, len(heights)-chartWidth*2)
 
 	labelStyle := lipgloss.NewStyle().Foreground(Colors.Border).Width(labelWidth).Align(lipgloss.Left)
-	left := borderStyle.Render("│")
-	right := borderStyle.Render("│")
+	left := boxSide()
+	right := boxSide()
 
 	for row := range chartRows {
 		var sb strings.Builder
@@ -148,7 +143,7 @@ func (c Chart) View(data []float64, width, height int, scale ChartScale) string 
 			dataIdxLeft := dataOffset + col*2
 			dataIdxRight := dataOffset + col*2 + 1
 
-			var char rune = 0x2800 // braille base character
+			char := brailleBase
 
 			if dataIdxLeft < len(heights) {
 				char |= brailleColumn(heights[dataIdxLeft], rowBottomDot, rowTopDot, leftDots)
@@ -178,9 +173,7 @@ func (c Chart) View(data []float64, width, height int, scale ChartScale) string 
 		lines = append(lines, left+label+" "+chartRow+right)
 	}
 
-	// Bottom border: ╰─────╯
-	bottomLine := "╰" + strings.Repeat("─", innerWidth) + "╯"
-	lines = append(lines, borderStyle.Render(bottomLine))
+	lines = append(lines, boxBottom(innerWidth))
 
 	return strings.Join(lines, "\n")
 }
@@ -267,10 +260,3 @@ func barColor(pct float64) color.Color {
 	}
 }
 
-func padOrTruncate(s string, width int) string {
-	w := lipgloss.Width(s)
-	if w >= width {
-		return s[:width]
-	}
-	return s + strings.Repeat(" ", width-w)
-}

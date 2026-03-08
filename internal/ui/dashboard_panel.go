@@ -20,6 +20,13 @@ const StoppedPanelHeight = 2
 const containerStatsBuffer = 10
 const peakWindow = containerStatsBuffer
 
+const (
+	defaultWarningPct = 60
+	defaultErrorPct   = 85
+	trafficWarningPct = 3
+	trafficErrorPct   = 5
+)
+
 type DashboardPanel struct {
 	app           docker.Application
 	scraper       *metrics.MetricsScraper
@@ -46,7 +53,7 @@ func (p DashboardPanel) DataMaxes() (traffic float64) {
 }
 
 func (p DashboardPanel) View(selected bool, toggling bool, showDetails bool, width int, scales DashboardScales) string {
-	innerWidth := max(width-3, 0) // 1 indicator + 1 left pad + 1 right pad
+	innerWidth := max(width-3, 0) // indicator(1) + left padding(1) + right padding(1)
 	detailed := showDetails && p.app.Running
 
 	var cards [3]MetricCard
@@ -65,9 +72,11 @@ func (p DashboardPanel) View(selected bool, toggling bool, showDetails bool, wid
 	var lines []string
 	lines = append(lines, titleLine)
 
-	// Show cards when the app is running, details are on, and there's enough width
-	minCardWidth := 8
-	if detailed && innerWidth >= minCardWidth*4+3 {
+	// Show cards when running, details on, and enough width for all 4 cards + 3 gaps
+	const minCardWidth = 8
+	const cardCount = 4
+	const cardGaps = cardCount - 1
+	if detailed && innerWidth >= minCardWidth*cardCount+cardGaps {
 		cardViews := p.renderCards(innerWidth, cards)
 		lines = append(lines, cardViews)
 	}
@@ -171,22 +180,17 @@ func (p DashboardPanel) buildMetricCards(scales DashboardScales) [3]MetricCard {
 	}
 
 	return [3]MetricCard{
-		NewMetricCard("CPU", cpuData, cpuScale, UnitPercent, cpuLimit, 60, 85),
-		NewMetricCard("Memory", memData, memScale, UnitBytes, memLimit, 60, 85),
-		NewTrafficCard(reqData, errData, scales.Traffic, errPct, 3, 5),
+		NewMetricCard("CPU", cpuData, cpuScale, UnitPercent, cpuLimit, defaultWarningPct, defaultErrorPct),
+		NewMetricCard("Memory", memData, memScale, UnitBytes, memLimit, defaultWarningPct, defaultErrorPct),
+		NewTrafficCard(reqData, errData, scales.Traffic, errPct, trafficWarningPct, trafficErrorPct),
 	}
 }
 
 func (p DashboardPanel) renderVisitsCard(width int) string {
-	borderStyle := lipgloss.NewStyle().Foreground(Colors.Border)
-	inner := width - 2
+	inner := width - 2 // left + right border
 
-	topFill := max(inner-1-len("Visits"), 0)
-	topLine := borderStyle.Render("╭─Visits" + strings.Repeat("─", topFill) + "╮")
-	bottomLine := borderStyle.Render("╰" + strings.Repeat("─", inner) + "╯")
-
-	left := borderStyle.Render("│")
-	right := borderStyle.Render("│")
+	left := boxSide()
+	right := boxSide()
 
 	var dayLine, weekLine string
 	if p.userStats != nil {
@@ -206,7 +210,7 @@ func (p DashboardPanel) renderVisitsCard(width int) string {
 	contentLines[1] = left + padOrTruncate(dayLine, inner) + right
 	contentLines[2] = left + padOrTruncate(weekLine, inner) + right
 
-	return topLine + "\n" + strings.Join(contentLines, "\n") + "\n" + bottomLine
+	return boxTop("Visits", inner) + "\n" + strings.Join(contentLines, "\n") + "\n" + boxBottom(inner)
 }
 
 func (p DashboardPanel) renderTopTransition(selected bool, width int) string {

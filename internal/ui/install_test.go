@@ -297,6 +297,47 @@ func TestInstall_FailureRestartsLogoOnlyWhenNoApps(t *testing.T) {
 	assert.Nil(t, cmd)
 }
 
+func TestOverlayBlockContainsRow(t *testing.T) {
+	block := newOverlayBlock("hello\nworld", 5, 10)
+	assert.Equal(t, 5, block.width) // "hello" and "world" are both 5 chars
+
+	// Row before block
+	_, ok := block.containsRow(4)
+	assert.False(t, ok)
+
+	// First row
+	line, ok := block.containsRow(5)
+	assert.True(t, ok)
+	assert.Equal(t, "hello", line)
+
+	// Second row
+	line, ok = block.containsRow(6)
+	assert.True(t, ok)
+	assert.Equal(t, "world", line)
+
+	// Row after block
+	_, ok = block.containsRow(7)
+	assert.False(t, ok)
+}
+
+func TestOverlayBlockPadsShortLines(t *testing.T) {
+	block := newOverlayBlock("hi\nworld", 0, 0)
+	assert.Equal(t, 5, block.width) // max("hi", "world") = 5
+
+	line, ok := block.containsRow(0)
+	assert.True(t, ok)
+	assert.Equal(t, "hi   ", line) // "hi" padded to width 5
+}
+
+func TestBlockWidth(t *testing.T) {
+	lines := []string{"short", "a longer line", "mid"}
+	assert.Equal(t, 13, blockWidth(lines))
+}
+
+func TestBlockWidthEmpty(t *testing.T) {
+	assert.Equal(t, 0, blockWidth(nil))
+}
+
 // Helpers
 
 func newTestInstall() Install {

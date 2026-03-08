@@ -55,26 +55,11 @@ func (h DashboardHeader) View(width int) string {
 	}
 
 	gap := 1
-	totalGaps := 2 * gap
-	panelWidth := (width - totalGaps) / 3
-	remainder := width - totalGaps - panelWidth*3
+	widths := distributeWidths(width-2*gap, 3) // 2 gaps between 3 panels
 
-	leftWidth := panelWidth
-	midWidth := panelWidth
-	rightWidth := panelWidth
-
-	// Distribute remainder pixels to left and middle panels
-	if remainder >= 1 {
-		leftWidth++
-		remainder--
-	}
-	if remainder >= 1 {
-		midWidth++
-	}
-
-	cpuView := h.renderCPUChart(leftWidth)
-	memView := h.renderMemChart(midWidth)
-	diskView := h.renderDiskGauge(rightWidth)
+	cpuView := h.renderCPUChart(widths[0])
+	memView := h.renderMemChart(widths[1])
+	diskView := h.renderDiskGauge(widths[2])
 
 	spacer := strings.Repeat(" ", gap)
 	return lipgloss.JoinHorizontal(lipgloss.Top, cpuView, spacer, memView, spacer, diskView)
@@ -113,21 +98,13 @@ func (h DashboardHeader) renderMemChart(width int) string {
 func (h DashboardHeader) renderDiskGauge(width int) string {
 	samples := h.scraper.Fetch(1)
 
-	borderStyle := lipgloss.NewStyle().Foreground(Colors.Border)
+	innerWidth := width - 2 // left + right border
 
-	innerWidth := width - 2
+	topLine := boxTop("Disk", innerWidth) + "\n"
+	bottomLine := boxBottom(innerWidth)
 
-	// Top border
-	title := "Disk"
-	titleLen := len(title)
-	topFill := max(innerWidth-1-titleLen, 0)
-	topLine := borderStyle.Render("╭─"+title+strings.Repeat("─", topFill)+"╮") + "\n"
-
-	// Bottom border
-	bottomLine := borderStyle.Render("╰" + strings.Repeat("─", innerWidth) + "╯")
-
-	left := borderStyle.Render("│")
-	right := borderStyle.Render("│")
+	left := boxSide()
+	right := boxSide()
 
 	contentRows := headerChartHeight
 
@@ -143,7 +120,7 @@ func (h DashboardHeader) renderDiskGauge(width int) string {
 	sample := samples[0]
 	pct := float64(sample.DiskUsed) / float64(sample.DiskTotal) * 100
 
-	barWidth := max(innerWidth-4, 0) // 2 padding + 2 margin
+	barWidth := max(innerWidth-4, 0) // left indent(2) + right margin(2)
 	bar := "  " + renderBar(pct, 0, 100, barColor(pct), barWidth)
 	pctLine := formatValueLine(fmt.Sprintf("  %.0f%% used", pct), formatDiskSize(sample.DiskTotal)+" ", innerWidth)
 	detailLine := fmt.Sprintf("  %s used, %s free", formatDiskSize(sample.DiskUsed), formatDiskSize(sample.DiskFree))
