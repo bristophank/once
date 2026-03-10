@@ -65,8 +65,8 @@ type startStopFinishedMsg struct {
 }
 
 func NewDashboard(ns *docker.Namespace, apps []*docker.Application, selectedIndex int,
-	scraper *metrics.MetricsScraper, dockerScraper *docker.Scraper, systemScraper *system.Scraper, userStats *userstats.Reader) Dashboard {
-
+	scraper *metrics.MetricsScraper, dockerScraper *docker.Scraper, systemScraper *system.Scraper, userStats *userstats.Reader,
+) Dashboard {
 	vp := viewport.New()
 	vp.MouseWheelEnabled = false
 	vp.KeyMap = viewport.KeyMap{} // disable default keys, we handle navigation ourselves
@@ -100,6 +100,17 @@ func (m Dashboard) Init() tea.Cmd {
 func (m Dashboard) Update(msg tea.Msg) (Component, tea.Cmd) {
 	var cmds []tea.Cmd
 
+	if m.overlay != nil {
+		var cmd tea.Cmd
+		m.overlay, cmd = m.overlay.Update(msg)
+		cmds = append(cmds, cmd)
+
+		switch msg.(type) {
+		case tea.KeyPressMsg, MouseEvent:
+			return m, cmd
+		}
+	}
+
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
@@ -108,23 +119,10 @@ func (m Dashboard) Update(msg tea.Msg) (Component, tea.Cmd) {
 		m.updateViewportSize()
 		m.rebuildViewportContent()
 
-		if m.overlay != nil {
-			var cmd tea.Cmd
-			m.overlay, cmd = m.overlay.Update(msg)
-			cmds = append(cmds, cmd)
-		}
-
 	case MouseEvent:
-		if m.overlay != nil {
-			var cmd tea.Cmd
-			m.overlay, cmd = m.overlay.Update(msg)
-			return m, cmd
-		}
 		if msg.IsClick {
 			if i, ok := m.panelIndexAtY(msg.Y); ok {
-				m.selectedIndex = i
-				m.rebuildViewportContent()
-				m.scrollToSelection()
+				m.selectPanel(i)
 				return m, nil
 			}
 			var cmd tea.Cmd
@@ -133,29 +131,15 @@ func (m Dashboard) Update(msg tea.Msg) (Component, tea.Cmd) {
 		}
 
 	case tea.KeyPressMsg:
-		if m.overlay != nil {
-			var cmd tea.Cmd
-			m.overlay, cmd = m.overlay.Update(msg)
-			return m, cmd
-		}
-
 		if key.Matches(msg, dashboardKeys.Quit) {
 			return m, func() tea.Msg { return QuitMsg{} }
 		}
 		if key.Matches(msg, dashboardKeys.Up) {
-			if m.selectedIndex > 0 {
-				m.selectedIndex--
-				m.rebuildViewportContent()
-				m.scrollToSelection()
-			}
+			m.selectPanel(m.selectedIndex - 1)
 			return m, nil
 		}
 		if key.Matches(msg, dashboardKeys.Down) {
-			if m.selectedIndex < len(m.apps)-1 {
-				m.selectedIndex++
-				m.rebuildViewportContent()
-				m.scrollToSelection()
-			}
+			m.selectPanel(m.selectedIndex + 1)
 			return m, nil
 		}
 		if key.Matches(msg, dashboardKeys.NewApp) {
@@ -181,8 +165,7 @@ func (m Dashboard) Update(msg tea.Msg) (Component, tea.Cmd) {
 		if key.Matches(msg, dashboardKeys.Details) && len(m.apps) > 0 {
 			m.showDetails = !m.showDetails
 			m.updateViewportSize()
-			m.rebuildViewportContent()
-			m.scrollToSelection()
+			m.selectPanel(m.selectedIndex)
 			return m, nil
 		}
 
@@ -240,25 +223,15 @@ func (m Dashboard) Update(msg tea.Msg) (Component, tea.Cmd) {
 		}
 		m.apps = m.namespace.Applications()
 		m.buildPanels()
-		m.selectedIndex = 0
+		newIndex := 0
 		for i, app := range m.apps {
 			if app.Settings.Name == previousName {
-				m.selectedIndex = i
+				newIndex = i
 				break
 			}
 		}
-		if m.selectedIndex >= len(m.apps) && len(m.apps) > 0 {
-			m.selectedIndex = len(m.apps) - 1
-		}
-		m.rebuildViewportContent()
-		m.scrollToSelection()
+		m.selectPanel(newIndex)
 		m.help.SetBindings(m.helpBindings())
-	}
-
-	if m.overlay != nil {
-		var cmd tea.Cmd
-		m.overlay, cmd = m.overlay.Update(msg)
-		cmds = append(cmds, cmd)
 	}
 
 	return m, tea.Batch(cmds...)
@@ -331,6 +304,12 @@ func (m Dashboard) runStartStop(app *docker.Application) tea.Cmd {
 
 func (m Dashboard) scheduleNextDashboardTick() tea.Cmd {
 	return tea.Every(time.Second, func(time.Time) tea.Msg { return dashboardTickMsg{} })
+}
+
+func (m *Dashboard) selectPanel(index int) {
+	m.selectedIndex = max(0, min(index, len(m.apps)-1))
+	m.rebuildViewportContent()
+	m.scrollToSelection()
 }
 
 func (m *Dashboard) updateViewportSize() {
