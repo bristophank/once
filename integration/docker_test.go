@@ -510,13 +510,11 @@ func TestBackupStoppedContainer(t *testing.T) {
 	require.NoError(t, ns.EnsureNetwork(ctx))
 	require.NoError(t, ns.Proxy().Boot(ctx, getProxyPorts(t)))
 
-	imageName := "ghcr.io/basecamp/once-campfire:main"
-	app := ns.AddApplication(docker.ApplicationSettings{
+	app := deployApp(t, ctx, ns, docker.ApplicationSettings{
 		Name:  "stoppedapp",
-		Image: imageName,
+		Image: "ghcr.io/basecamp/once-campfire:main",
 		Host:  "stoppedapp.localhost",
 	})
-	require.NoError(t, app.Deploy(ctx, nil))
 
 	containerName, err := app.ContainerName(ctx)
 	require.NoError(t, err)
