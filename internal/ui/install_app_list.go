@@ -68,7 +68,7 @@ func (m InstallAppList) View() string {
 		Foreground(Colors.Primary).
 		MarginBottom(1)
 
-	title := titleStyle.Render("Choose an application to install")
+	title := titleStyle.Render("Choose an application")
 	m.menu.SetWidth(lipgloss.Width(title))
 	menuView := m.menu.View()
 
