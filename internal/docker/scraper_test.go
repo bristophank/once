@@ -137,6 +137,7 @@ func TestScraperScrapeFindsContainers(t *testing.T) {
 	<-delivered
 	<-delivered
 	scrapeUntil(t, s, "myapp", 50.0)
+	scrapeUntil(t, s, "other", 25.0)
 
 	samples := s.Fetch("myapp", 1)
 	require.Len(t, samples, 1)
