@@ -75,6 +75,7 @@ Fundamentally, ONCE works with any web application that:
 
 - Is packaged as a Docker container
 - Serves HTTP on port 80
+- Has a healthcheck endpoint at `/up` that returns success
 - Keeps its persistent data in `/storage`
 
 Any application that does these things should work with ONCE.
