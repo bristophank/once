@@ -28,17 +28,6 @@ func TestBackupToFile_RelativePath(t *testing.T) {
 	require.ErrorIs(t, err, ErrBackupPathRelative)
 }
 
-func TestBackupToFile_CreatesDirectory(t *testing.T) {
-	dir := filepath.Join(t.TempDir(), "nested", "backup", "dir")
-
-	_, _, err := prepareBackupDir(dir)
-	require.NoError(t, err)
-
-	info, err := os.Stat(dir)
-	require.NoError(t, err)
-	assert.True(t, info.IsDir())
-}
-
 func TestBackup_EmptyPath(t *testing.T) {
 	app := &Application{Settings: ApplicationSettings{Name: "chat"}}
 	err := app.Backup(context.Background())

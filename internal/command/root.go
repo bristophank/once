@@ -12,9 +12,8 @@ import (
 )
 
 type RootCommand struct {
-	cmd         *cobra.Command
-	namespace   string
-	closeLogger func()
+	cmd       *cobra.Command
+	namespace string
 
 	installImageRef string
 }
@@ -28,21 +27,10 @@ func NewRootCommand() *RootCommand {
 		CompletionOptions: cobra.CompletionOptions{
 			HiddenDefaultCmd: true,
 		},
-		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-			closeLogger, err := logging.SetupFile()
-			if err != nil {
-				return fmt.Errorf("setting up logging: %w", err)
-			}
-			r.closeLogger = closeLogger
-			return nil
-		},
-		PersistentPostRun: func(cmd *cobra.Command, args []string) {
-			if r.closeLogger != nil {
-				r.closeLogger()
-			}
-		},
 		RunE: WithNamespace(func(ctx context.Context, ns *docker.Namespace, cmd *cobra.Command, args []string) error {
-			return ui.Run(ns, r.installImageRef)
+			return logging.ToLogFile(func() error {
+				return ui.Run(ns, r.installImageRef)
+			})
 		}),
 	}
 	r.cmd.PersistentFlags().StringVarP(&r.namespace, "namespace", "n", docker.DefaultNamespace, "namespace for containers")

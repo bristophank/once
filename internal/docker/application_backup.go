@@ -12,12 +12,13 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/containerd/errdefs"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/mount"
+
+	"github.com/basecamp/once/internal/fsutil"
 )
 
 const (
@@ -42,24 +43,20 @@ func (a *Application) BackupName() string {
 }
 
 func (a *Application) BackupToFile(ctx context.Context, dir string, name string) error {
-	uid, gid, err := prepareBackupDir(dir)
-	if err != nil {
-		slog.Error("Failed to create backup directory", "app", a.Settings.Name, "directory", dir, "error", err)
-		return err
+	if dir == "" {
+		return fmt.Errorf("backup location is required")
+	}
+	if !filepath.IsAbs(dir) {
+		return ErrBackupPathRelative
 	}
 
 	filePath := filepath.Join(dir, name)
-	file, err := os.Create(filePath)
+	file, err := fsutil.CreateFile(filePath)
 	if err != nil {
 		slog.Error("Failed to create backup file", "app", a.Settings.Name, "filename", filePath, "error", err)
 		return fmt.Errorf("creating backup file: %w", err)
 	}
 	defer file.Close()
-
-	if err := os.Chown(filePath, uid, gid); err != nil {
-		slog.Error("Failed to set backup file ownership", "app", a.Settings.Name, "filename", filePath, "error", err)
-		return fmt.Errorf("setting backup file ownership: %w", err)
-	}
 
 	err = a.backupToWriter(ctx, file)
 	a.saveOperationResult(ctx, func(s *State) { s.RecordBackup(a.Settings.Name, err) })
@@ -331,74 +328,6 @@ func (a *Application) tryHookScript(ctx context.Context, containerName, name str
 }
 
 // Helpers
-
-func prepareBackupDir(dir string) (int, int, error) {
-	if dir == "" {
-		return 0, 0, fmt.Errorf("backup location is required")
-	}
-
-	if !filepath.IsAbs(dir) {
-		return 0, 0, ErrBackupPathRelative
-	}
-
-	uid, gid, err := findOwnership(dir)
-	if err != nil {
-		return 0, 0, fmt.Errorf("determining backup directory ownership: %w", err)
-	}
-
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return 0, 0, fmt.Errorf("creating backup directory: %w", err)
-	}
-
-	if err := chownNewDirs(dir, uid, gid); err != nil {
-		return 0, 0, fmt.Errorf("setting backup directory ownership: %w", err)
-	}
-
-	return uid, gid, nil
-}
-
-func findOwnership(dir string) (int, int, error) {
-	for path := dir; ; path = filepath.Dir(path) {
-		info, err := os.Stat(path)
-		if err == nil {
-			stat := info.Sys().(*syscall.Stat_t)
-			return int(stat.Uid), int(stat.Gid), nil
-		}
-		if !os.IsNotExist(err) {
-			return 0, 0, err
-		}
-		if path == "/" {
-			return 0, 0, fmt.Errorf("no existing parent directory found for %s", dir)
-		}
-	}
-}
-
-func chownNewDirs(dir string, uid, gid int) error {
-	// Collect dirs from deepest to shallowest, stopping at the first
-	// one that already has the correct ownership.
-	var dirs []string
-	for path := dir; ; path = filepath.Dir(path) {
-		info, err := os.Stat(path)
-		if err != nil {
-			break
-		}
-		stat := info.Sys().(*syscall.Stat_t)
-		if int(stat.Uid) == uid && int(stat.Gid) == gid {
-			break
-		}
-		dirs = append(dirs, path)
-		if path == "/" {
-			break
-		}
-	}
-
-	for _, d := range dirs {
-		if err := os.Chown(d, uid, gid); err != nil {
-			return err
-		}
-	}
-	return nil
-}
 
 func parseBackupTime(appName, filename string) (time.Time, bool) {
 	prefix := appName + "-"

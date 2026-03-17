@@ -1,31 +1,37 @@
 package logging
 
 import (
-	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
+
+	"github.com/basecamp/once/internal/fsutil"
 )
 
-func SetupFile() (func(), error) {
+// ToLogFile switches logging to a file for the duration of fn, then restores
+// stderr logging when fn returns.
+func ToLogFile(fn func() error) error {
 	dir, err := stateDir()
 	if err != nil {
-		return nil, fmt.Errorf("determining log directory: %w", err)
-	}
-
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return nil, fmt.Errorf("creating log directory: %w", err)
+		slog.Warn("Could not determine log directory", "error", err)
+		return fn()
 	}
 
 	path := filepath.Join(dir, "once.log")
-	file, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	file, err := fsutil.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
 	if err != nil {
-		return nil, fmt.Errorf("opening log file: %w", err)
+		slog.Warn("Could not open log file", "error", err)
+		return fn()
 	}
+
+	defer func() {
+		SetupStderr()
+		file.Close()
+	}()
 
 	slog.SetDefault(slog.New(slog.NewTextHandler(file, nil)))
 
-	return func() { file.Close() }, nil
+	return fn()
 }
 
 func SetupStderr() {
