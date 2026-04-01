@@ -108,13 +108,17 @@ func (n *Namespace) Applications() []*Application {
 	return n.applications
 }
 
-func (n *Namespace) HostInUse(host string) bool {
+func (n *Namespace) ApplicationByHost(host string) *Application {
 	for _, app := range n.applications {
 		if app.Settings.Host == host {
-			return true
+			return app
 		}
 	}
-	return false
+	return nil
+}
+
+func (n *Namespace) HostInUse(host string) bool {
+	return n.ApplicationByHost(host) != nil
 }
 
 func (n *Namespace) HostInUseByAnother(host string, excludeApp string) bool {
