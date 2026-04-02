@@ -97,10 +97,7 @@ func (m *cliProgress) View() tea.View {
 
 func (m *cliProgress) barWidth() int {
 	prefixWidth := len(m.label) + 1 + len(m.stage) + 2 // " " + stage + ": "
-	w := m.width - prefixWidth
-	if w < 10 {
-		w = 10
-	}
+	w := max(m.width-prefixWidth, 10)
 	return w
 }
 
